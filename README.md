@@ -81,6 +81,25 @@ When running in Docker, additional security constraints apply:
 - `/tools` - List available tools
 - `/workspace` - Show workspace contents
 
+## Architecture
+
+```
++--------------------------------------------------+
+|                   ClawLite                       |
+|  +--------------------------------------------+  |
+|  |  Telegram Bot                              |--+--> Telegram API
+|  |    |                                       |  |
+|  |    v                                       |  |
+|  |  Agent Loop                                |  |
+|  |    |                                       |  |
+|  |    +---> Tool Executor ---> ./workspace/   |  |
+|  |    |                                       |  |
+|  |    v                                       |  |
+|  |  LLM Client -------------------------------|--+--> Ollama
+|  +--------------------------------------------+  |
++--------------------------------------------------+
+```
+
 ## Configuration
 
 | Variable | Description | Default |

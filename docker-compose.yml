@@ -1,0 +1,37 @@
+services:
+  clawlite:
+    build: .
+    container_name: clawlite-agent
+    restart: unless-stopped
+    
+    # Security settings
+    user: "1000:1000"
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    
+    # Resource limits
+    mem_limit: 512m
+    cpus: 1
+    
+    # Environment
+    env_file:
+      - .env
+    
+    # Volumes
+    volumes:
+      - ./workspace:/workspace:rw
+      - /tmp/clawlite:/tmp:rw
+      - ./src:/app/src:ro
+      - ./prompts:/app/prompts:ro
+    
+    # Tmpfs for writable areas
+    tmpfs:
+      - /app/__pycache__:size=50m
+    
+    # Network - needs access to Ollama and Telegram API
+    # Add extra_hosts if Ollama is on a different machine:
+    # extra_hosts:
+    #   - "ollama-host:192.168.1.100"

@@ -1,10 +1,10 @@
 # ClawLite
 
-A lightweight agentic AI assistant. Telegram bot powered by Ollama LLMs with tool-calling capabilities.
+A lightweight agentic AI assistant. Telegram bot powered by LLMs with tool-calling capabilities.
 
 ## Features
 
-- **LLM-powered** - Works with any Ollama model (reasoning models like Nanbeige work best)
+- **Multi-provider LLM** - Works with Ollama (local) or OpenRouter (cloud: Gemini, Claude, etc.)
 - **Tool calling** - Can read/write files, search, and execute commands
 - **Multi-user sessions** - Each user gets isolated persistent memory
 - **Workspace isolation** - Only has access to configured workspace directory
@@ -16,8 +16,10 @@ A lightweight agentic AI assistant. Telegram bot powered by Ollama LLMs with too
 ### Prerequisites
 
 - Python 3.10+
-- Ollama running (locally or remote)
 - Telegram bot token from [@BotFather](https://t.me/BotFather)
+- **One of:**
+  - Ollama running (locally or remote)
+  - OpenRouter API key
 
 ### Setup
 
@@ -27,14 +29,25 @@ cd clawlite
 cp .env.example .env
 ```
 
-Configure `.env`:
+### Configure LLM Provider
+
+**Option 1: Ollama (local/self-hosted)**
 
 ```env
-TELEGRAM_TOKEN=your_bot_token_here
+LLM_PROVIDER=ollama
 OLLAMA_HOST=http://localhost:11434
 OLLAMA_MODEL=llama3.2:3b
-ALLOWED_USERS=your_telegram_user_id
 ```
+
+**Option 2: OpenRouter (cloud)**
+
+```env
+LLM_PROVIDER=openrouter
+OPENROUTER_API_KEY=sk-or-v1-xxxxx
+OPENROUTER_MODEL=google/gemini-2.5-pro-preview-03-25
+```
+
+See [OpenRouter Models](https://openrouter.ai/models) for available models.
 
 ### Run with Python
 
@@ -104,7 +117,9 @@ When running in Docker, additional security constraints apply:
 |  |    +---> Tool Executor ---> ./workspace/users/{id} |  |
 |  |    |                                               |  |
 |  |    v                                               |  |
-|  |  LLM Client ---------------------------------------|--+--> Ollama
+|  |  LLM Client (multi-provider)                       |  |
+|  |    +-- Ollama ----------------------------------|--+--> Local LLM
+|  |    +-- OpenRouter -----------------------------|--+--> Cloud LLM
 |  +----------------------------------------------------+  |
 +----------------------------------------------------------+
 ```
@@ -143,8 +158,11 @@ workspace/
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `TELEGRAM_TOKEN` | Bot token from @BotFather | required |
+| `LLM_PROVIDER` | LLM provider (`ollama` or `openrouter`) | `ollama` |
 | `OLLAMA_HOST` | Ollama server URL | `http://localhost:11434` |
-| `OLLAMA_MODEL` | Model name | `llama3.2:3b` |
+| `OLLAMA_MODEL` | Ollama model name | `llama3.2:3b` |
+| `OPENROUTER_API_KEY` | OpenRouter API key | - |
+| `OPENROUTER_MODEL` | OpenRouter model ID | `google/gemini-2.5-pro-preview-03-25` |
 | `ALLOWED_USERS` | Comma-separated user IDs | empty (all allowed) |
 | `WORKSPACE_DIR` | Workspace directory | `/workspace` |
 | `TRANSLATION_ENABLED` | Enable ID↔EN translation | `false` |
@@ -166,12 +184,17 @@ And set `OLLAMA_HOST=http://ollama-host:11434` in `.env`.
 
 ## Recommended Models
 
-**Reasoning/thinking models** (best for agentic tasks):
+**OpenRouter (cloud):**
+- `google/gemini-2.5-pro-preview-03-25` - Excellent reasoning, tool use
+- `anthropic/claude-sonnet-4` - Great for agentic tasks
+- `openai/gpt-4o` - Good all-rounder
+
+**Ollama (local) - Reasoning models:**
 - `nanbeige4.1:q8` - Chinese reasoning model
 - `deepseek-r1:8b` - Good reasoning capability
 - `qwq:32b` - Excellent for complex tasks
 
-**General purpose:**
+**Ollama (local) - General purpose:**
 - `llama3.2:3b` - Fast and lightweight
 - `mistral:7b` - Good balance
 

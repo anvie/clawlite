@@ -6,6 +6,7 @@ A lightweight agentic AI assistant. Telegram bot powered by Ollama LLMs with too
 
 - **LLM-powered** - Works with any Ollama model (reasoning models like Nanbeige work best)
 - **Tool calling** - Can read/write files, search, and execute commands
+- **Multi-user sessions** - Each user gets isolated persistent memory
 - **Workspace isolation** - Only has access to configured workspace directory
 - **Streaming** - Real-time thinking and response streaming to Telegram
 - **Optional Docker** - Run directly with Python or in a sandboxed Docker container
@@ -60,6 +61,10 @@ docker-compose logs -f
 | `list_dir` | List directory contents |
 | `exec` | Execute safe shell commands |
 | `search_files` | Search text in files |
+| `memory_log` | Append to today's memory log |
+| `memory_read` | Read long-term or daily memory |
+| `memory_update` | Update long-term memory |
+| `user_update` | Update user profile |
 
 ## Security (Docker mode)
 
@@ -84,21 +89,54 @@ When running in Docker, additional security constraints apply:
 ## Architecture
 
 ```
-+--------------------------------------------------+
-|                   ClawLite                       |
-|  +--------------------------------------------+  |
-|  |  Telegram Bot                              |--+--> Telegram API
-|  |    |                                       |  |
-|  |    v                                       |  |
-|  |  Agent Loop                                |  |
-|  |    |                                       |  |
-|  |    +---> Tool Executor ---> ./workspace/   |  |
-|  |    |                                       |  |
-|  |    v                                       |  |
-|  |  LLM Client -------------------------------|--+--> Ollama
-|  +--------------------------------------------+  |
-+--------------------------------------------------+
++----------------------------------------------------------+
+|                       ClawLite                           |
+|  +----------------------------------------------------+  |
+|  |  Telegram Bot                                      |--+--> Telegram API
+|  |    |                                               |  |
+|  |    v                                               |  |
+|  |  Context Loader (per-user)                         |  |
+|  |    |  - Load SOUL.md, AGENTS.md (shared)           |  |
+|  |    |  - Load USER.md, MEMORY.md (per-user)         |  |
+|  |    v                                               |  |
+|  |  Agent Loop                                        |  |
+|  |    |                                               |  |
+|  |    +---> Tool Executor ---> ./workspace/users/{id} |  |
+|  |    |                                               |  |
+|  |    v                                               |  |
+|  |  LLM Client ---------------------------------------|--+--> Ollama
+|  +----------------------------------------------------+  |
++----------------------------------------------------------+
 ```
+
+## Multi-User Sessions
+
+Each Telegram user gets their own isolated memory space:
+
+```
+workspace/
+├── SOUL.md              # Shared bot persona
+├── AGENTS.md            # Shared bot rules
+├── TOOLS.md             # Shared tool notes (optional)
+└── users/
+    └── {user_id}/
+        ├── USER.md      # Info about this user
+        ├── MEMORY.md    # Long-term memory
+        └── memory/
+            └── YYYY-MM-DD.md  # Daily conversation logs
+```
+
+**How it works:**
+- Shared files (`SOUL.md`, `AGENTS.md`) define the bot's personality and rules
+- User folders are auto-created on first message
+- Memory tools read/write to the user's own folder
+- Context is loaded per-user: shared files + user's files
+
+**Memory tools:**
+- `memory_log` - Append notes to today's daily log
+- `memory_read` - Read `MEMORY.md` or a specific day's log
+- `memory_update` - Append to long-term memory
+- `user_update` - Update user profile (`USER.md`)
 
 ## Configuration
 
@@ -108,7 +146,8 @@ When running in Docker, additional security constraints apply:
 | `OLLAMA_HOST` | Ollama server URL | `http://localhost:11434` |
 | `OLLAMA_MODEL` | Model name | `llama3.2:3b` |
 | `ALLOWED_USERS` | Comma-separated user IDs | empty (all allowed) |
-| `WORKSPACE_PATH` | Workspace path | `/workspace` |
+| `WORKSPACE_DIR` | Workspace directory | `/workspace` |
+| `TRANSLATION_ENABLED` | Enable ID↔EN translation | `false` |
 
 ## Remote Ollama
 

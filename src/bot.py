@@ -197,14 +197,20 @@ def main() -> None:
     application.add_handler(CommandHandler("workspace", workspace_cmd))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
-    ollama_host = os.getenv("OLLAMA_HOST", "http://localhost:11434")
-    ollama_model = os.getenv("OLLAMA_MODEL", "llama3.2:3b")
+    llm_provider = os.getenv("LLM_PROVIDER", "ollama").lower()
     
     print(f"🚀 ClawLite started!")
-    print(f"   Model: {ollama_model}")
-    print(f"   Ollama: {ollama_host}")
+    if llm_provider == "openrouter":
+        model = os.getenv("OPENROUTER_MODEL", "google/gemini-2.5-pro-preview-03-25")
+        print(f"   Provider: OpenRouter")
+        print(f"   Model: {model}")
+    else:
+        ollama_host = os.getenv("OLLAMA_HOST", "http://localhost:11434")
+        ollama_model = os.getenv("OLLAMA_MODEL", "llama3.2:3b")
+        print(f"   Provider: Ollama")
+        print(f"   Model: {ollama_model}")
+        print(f"   Host: {ollama_host}")
     print(f"   Workspace: /workspace")
-    print(f"   Tools: read_file, write_file, list_dir, exec, run_bash, run_python, list_processes, kill_process, search_files")
     logger.info("Bot ready")
     
     application.run_polling(allowed_updates=Update.ALL_TYPES)

@@ -70,11 +70,12 @@ async def clear(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def tools_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    if not is_allowed(update.effective_user.id):
+    user_id = update.effective_user.id
+    if not is_allowed(user_id):
         return
     
     from .tools import list_tools
-    tools = list_tools()
+    tools = list_tools(user_id=user_id)
     
     text = "🔧 *Available Tools:*\n\n"
     for t in tools:
@@ -125,10 +126,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                 pass
     
     try:
-        # Run agent
+        # Run agent with user_id for context and memory tools
         response, new_history = await run_agent(
             user_message,
             conversations[user.id],
+            user_id=user.id,
             status_callback=update_status,
         )
         

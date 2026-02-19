@@ -1,0 +1,132 @@
+"""Context loader with user isolation."""
+
+import os
+from datetime import date, timedelta
+from pathlib import Path
+from typing import Optional
+
+WORKSPACE_DIR = os.environ.get("WORKSPACE_DIR", "/workspace")
+
+
+def get_user_dir(user_id: int) -> Path:
+    """Get the user's directory path."""
+    return Path(WORKSPACE_DIR) / "users" / str(user_id)
+
+
+def ensure_user_dir(user_id: int) -> Path:
+    """Create user directory structure if it doesn't exist."""
+    user_dir = get_user_dir(user_id)
+    memory_dir = user_dir / "memory"
+    
+    # Create directories
+    memory_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Create default USER.md if not exists
+    user_file = user_dir / "USER.md"
+    if not user_file.exists():
+        user_file.write_text(f"# User {user_id}\n\n*(Info tentang user ini akan diisi seiring waktu)*\n")
+    
+    # Create empty MEMORY.md if not exists
+    memory_file = user_dir / "MEMORY.md"
+    if not memory_file.exists():
+        memory_file.write_text("# Long-term Memory\n\n*(Catatan penting yang perlu diingat)*\n")
+    
+    return user_dir
+
+
+def read_file_safe(path: Path) -> Optional[str]:
+    """Read file if exists, return None otherwise."""
+    try:
+        if path.exists():
+            return path.read_text()
+    except Exception:
+        pass
+    return None
+
+
+def load_shared_context() -> str:
+    """Load shared context files (SOUL.md, AGENTS.md, TOOLS.md)."""
+    workspace = Path(WORKSPACE_DIR)
+    parts = []
+    
+    # Shared files
+    for filename in ["SOUL.md", "AGENTS.md", "TOOLS.md"]:
+        content = read_file_safe(workspace / filename)
+        if content:
+            parts.append(f"## {filename}\n\n{content}")
+    
+    return "\n\n---\n\n".join(parts)
+
+
+def load_user_context(user_id: int) -> str:
+    """Load user-specific context files."""
+    user_dir = ensure_user_dir(user_id)
+    parts = []
+    
+    # User info
+    user_md = read_file_safe(user_dir / "USER.md")
+    if user_md:
+        parts.append(f"## USER.md (Info tentang user ini)\n\n{user_md}")
+    
+    # Long-term memory
+    memory_md = read_file_safe(user_dir / "MEMORY.md")
+    if memory_md:
+        parts.append(f"## MEMORY.md (Long-term memory)\n\n{memory_md}")
+    
+    # Recent daily logs (today + yesterday)
+    memory_dir = user_dir / "memory"
+    today = date.today()
+    yesterday = today - timedelta(days=1)
+    
+    for d in [yesterday, today]:
+        daily_file = memory_dir / f"{d.isoformat()}.md"
+        content = read_file_safe(daily_file)
+        if content:
+            parts.append(f"## Daily Log: {d.isoformat()}\n\n{content}")
+    
+    return "\n\n---\n\n".join(parts)
+
+
+def load_full_context(user_id: int) -> str:
+    """Load complete context for a user (shared + user-specific)."""
+    shared = load_shared_context()
+    user = load_user_context(user_id)
+    
+    parts = []
+    if shared:
+        parts.append("# Shared Context\n\n" + shared)
+    if user:
+        parts.append("# Your Context\n\n" + user)
+    
+    return "\n\n===\n\n".join(parts)
+
+
+def get_today_memory_path(user_id: int) -> Path:
+    """Get path to today's memory file for a user."""
+    user_dir = ensure_user_dir(user_id)
+    today = date.today().isoformat()
+    return user_dir / "memory" / f"{today}.md"
+
+
+def append_to_daily_memory(user_id: int, content: str) -> bool:
+    """Append content to today's memory file."""
+    try:
+        path = get_today_memory_path(user_id)
+        
+        # Read existing content
+        existing = ""
+        if path.exists():
+            existing = path.read_text()
+        
+        # Append with timestamp
+        from datetime import datetime
+        timestamp = datetime.now().strftime("%H:%M")
+        
+        if existing and not existing.endswith("\n"):
+            existing += "\n"
+        
+        new_content = existing + f"\n### {timestamp}\n\n{content}\n"
+        path.write_text(new_content)
+        return True
+    except Exception:
+        return False

@@ -8,6 +8,7 @@ from typing import Optional, Callable, Awaitable
 from .llm import stream_generate
 from .tools import get_tool, format_tools_for_prompt
 from .translation import translate_to_english, translate_to_indonesian, TRANSLATION_ENABLED
+from .context import load_full_context, ensure_user_dir
 
 # Load system prompt
 PROMPTS_DIR = os.path.join(os.path.dirname(__file__), "..", "prompts")
@@ -53,6 +54,7 @@ Be helpful, concise, and careful with file operations.
 async def run_agent(
     user_message: str,
     history: list[dict],
+    user_id: Optional[int] = None,
     status_callback: Optional[Callable[[str], Awaitable[None]]] = None,
     max_iterations: int = 10,
 ) -> tuple[str, list[dict]]:
@@ -62,6 +64,7 @@ async def run_agent(
     Args:
         user_message: The user's input
         history: Conversation history
+        user_id: Telegram user ID (for user-scoped context and tools)
         status_callback: Async callback for status updates
         max_iterations: Maximum tool call iterations
     
@@ -69,6 +72,13 @@ async def run_agent(
         (final_response, updated_history)
     """
     system_prompt = load_system_prompt()
+    
+    # Load user-specific context if user_id provided
+    if user_id:
+        ensure_user_dir(user_id)
+        user_context = load_full_context(user_id)
+        if user_context:
+            system_prompt += f"\n\n# Context\n\n{user_context}"
     
     # Translate user message if translation is enabled
     processed_message = user_message
@@ -148,7 +158,7 @@ async def run_agent(
                 if status_callback:
                     await status_callback(f"🔧 Calling: `{tool_name}`\n```json\n{json.dumps(tool_args, indent=2)}\n```")
                 
-                tool = get_tool(tool_name)
+                tool = get_tool(tool_name, user_id=user_id)
                 if tool:
                     result = await tool.execute(**tool_args)
                     

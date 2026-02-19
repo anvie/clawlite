@@ -5,12 +5,17 @@ Lightweight agentic AI powered by Ollama with tool calling
 """
 
 import os
+import base64
 import logging
+from datetime import datetime
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 from dotenv import load_dotenv
 
 from .agent import run_agent
+
+# Workspace path for file operations
+WORKSPACE = os.getenv("WORKSPACE_PATH", "/workspace")
 
 load_dotenv()
 
@@ -29,6 +34,29 @@ logging.getLogger("telegram").setLevel(logging.WARNING)
 
 # Conversation history per user
 conversations: dict[int, list[dict]] = {}
+
+# Supported image extensions for vision
+IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.gif', '.webp'}
+
+
+async def download_telegram_file(file_obj, user_id: int, filename: str) -> str:
+    """Download a Telegram file to workspace/uploads/{user_id}/"""
+    # Create upload directory
+    upload_dir = os.path.join(WORKSPACE, "uploads", str(user_id))
+    os.makedirs(upload_dir, exist_ok=True)
+    
+    # Generate unique filename with timestamp
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    name, ext = os.path.splitext(filename)
+    unique_filename = f"{name}_{timestamp}{ext}"
+    
+    file_path = os.path.join(upload_dir, unique_filename)
+    
+    # Download file
+    await file_obj.download_to_drive(file_path)
+    
+    # Return relative path from workspace root
+    return os.path.relpath(file_path, WORKSPACE)
 
 
 def is_allowed(user_id: int) -> bool:
@@ -98,14 +126,23 @@ async def workspace_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         await update.message.reply_text(f"❌ Error: {result.error}")
 
 
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE, file_context: str = None, images: list[str] = None) -> None:
     user = update.effective_user
     if not is_allowed(user.id):
         await update.message.reply_text("⛔ Not authorized.")
         return
     
-    user_message = update.message.text
-    logger.info(f"📩 USER [{user.id}]: {user_message[:100]}...")
+    user_message = update.message.text or update.message.caption or ""
+    
+    # Prepend file context if provided
+    if file_context:
+        user_message = f"{file_context}\n\n{user_message}" if user_message else file_context
+    
+    if not user_message:
+        await update.message.reply_text("❓ No message received.")
+        return
+    
+    logger.info(f"📩 USER [{user.id}]: {user_message[:100]}{'(+image)' if images else ''}...")
     
     # Get or create history
     if user.id not in conversations:
@@ -132,6 +169,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             conversations[user.id],
             user_id=user.id,
             status_callback=update_status,
+            images=images,
         )
         
         # Update history
@@ -184,6 +222,85 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await status_msg.edit_text(f"❌ Error: {str(e)[:500]}")
 
 
+async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle photo messages."""
+    user = update.effective_user
+    if not is_allowed(user.id):
+        await update.message.reply_text("⛔ Not authorized.")
+        return
+    
+    # Get the largest photo (best quality)
+    photo = update.message.photo[-1]
+    
+    try:
+        # Download photo
+        file_obj = await context.bot.get_file(photo.file_id)
+        filename = f"photo_{photo.file_unique_id}.jpg"
+        relative_path = await download_telegram_file(file_obj, user.id, filename)
+        
+        logger.info(f"📷 Photo from [{user.id}] saved to: {relative_path}")
+        
+        # Read image as base64 for multimodal LLM
+        full_path = os.path.join(WORKSPACE, relative_path)
+        with open(full_path, "rb") as f:
+            image_base64 = base64.b64encode(f.read()).decode("utf-8")
+        
+        # Create file context for the agent
+        file_context = f"[User sent an image which is now visible to you. The image is also saved at: {relative_path}]"
+        
+        # Process with agent (with image for vision)
+        await handle_message(update, context, file_context=file_context, images=[image_base64])
+        
+    except Exception as e:
+        logger.error(f"Error handling photo from {user.id}: {e}")
+        await update.message.reply_text(f"❌ Failed to process image: {str(e)[:200]}")
+
+
+async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle document/file messages."""
+    user = update.effective_user
+    if not is_allowed(user.id):
+        await update.message.reply_text("⛔ Not authorized.")
+        return
+    
+    doc = update.message.document
+    
+    # Size limit: 20MB
+    if doc.file_size and doc.file_size > 20 * 1024 * 1024:
+        await update.message.reply_text("❌ File too large (max 20MB).")
+        return
+    
+    try:
+        # Download document
+        file_obj = await context.bot.get_file(doc.file_id)
+        filename = doc.file_name or f"file_{doc.file_unique_id}"
+        relative_path = await download_telegram_file(file_obj, user.id, filename)
+        
+        logger.info(f"📎 Document from [{user.id}] saved to: {relative_path} ({doc.mime_type})")
+        
+        # Check if it's an image
+        _, ext = os.path.splitext(filename.lower())
+        is_image = ext in IMAGE_EXTENSIONS
+        
+        images = None
+        if is_image:
+            # Read image as base64 for multimodal LLM
+            full_path = os.path.join(WORKSPACE, relative_path)
+            with open(full_path, "rb") as f:
+                image_base64 = base64.b64encode(f.read()).decode("utf-8")
+            images = [image_base64]
+            file_context = f"[User sent an image file which is now visible to you. The image is also saved at: {relative_path}]"
+        else:
+            file_context = f"[User sent a file: {relative_path}]\nFile type: {doc.mime_type or 'unknown'}\nSize: {doc.file_size} bytes\nThe file has been saved to workspace. You can read it with read_file tool at path: {relative_path}"
+        
+        # Process with agent
+        await handle_message(update, context, file_context=file_context, images=images)
+        
+    except Exception as e:
+        logger.error(f"Error handling document from {user.id}: {e}")
+        await update.message.reply_text(f"❌ Failed to process file: {str(e)[:200]}")
+
+
 def main() -> None:
     if not TELEGRAM_TOKEN:
         print("❌ TELEGRAM_TOKEN not set!")
@@ -195,6 +312,8 @@ def main() -> None:
     application.add_handler(CommandHandler("clear", clear))
     application.add_handler(CommandHandler("tools", tools_cmd))
     application.add_handler(CommandHandler("workspace", workspace_cmd))
+    application.add_handler(MessageHandler(filters.PHOTO, handle_photo))
+    application.add_handler(MessageHandler(filters.Document.ALL, handle_document))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
     llm_provider = os.getenv("LLM_PROVIDER", "ollama").lower()

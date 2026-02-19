@@ -28,6 +28,7 @@ class LLMProvider(ABC):
         prompt: str,
         system: str = "",
         temperature: float = 0.3,
+        images: list[str] = None,  # List of base64 encoded images
     ) -> AsyncGenerator[Tuple[str, bool, Optional[str]], None]:
         """
         Stream response from LLM.
@@ -41,12 +42,13 @@ class LLMProvider(ABC):
         prompt: str,
         system: str = "",
         temperature: float = 0.3,
+        images: list[str] = None,
     ) -> Tuple[str, Optional[str]]:
         """Generate response (non-streaming)."""
         full_response = ""
         thinking = None
         
-        async for token, is_thinking, thinking_content in self.stream_generate(prompt, system, temperature):
+        async for token, is_thinking, thinking_content in self.stream_generate(prompt, system, temperature, images):
             full_response += token
             if thinking_content:
                 thinking = thinking_content
@@ -73,6 +75,7 @@ class OllamaProvider(LLMProvider):
         prompt: str,
         system: str = "",
         temperature: float = 0.3,
+        images: list[str] = None,  # Not supported by Ollama text models
     ) -> AsyncGenerator[Tuple[str, bool, Optional[str]], None]:
         """Stream response from Ollama."""
         
@@ -156,6 +159,7 @@ class OpenRouterProvider(LLMProvider):
         prompt: str,
         system: str = "",
         temperature: float = 0.3,
+        images: list[str] = None,  # List of base64 encoded images
     ) -> AsyncGenerator[Tuple[str, bool, Optional[str]], None]:
         """Stream response from OpenRouter."""
         
@@ -165,7 +169,33 @@ class OpenRouterProvider(LLMProvider):
         messages = []
         if system:
             messages.append({"role": "system", "content": system})
-        messages.append({"role": "user", "content": prompt})
+        
+        # Build user message content (multimodal if images provided)
+        if images:
+            content = []
+            # Add text first
+            content.append({"type": "text", "text": prompt})
+            # Add images
+            for img_base64 in images:
+                # Detect image type from base64 header or default to jpeg
+                if img_base64.startswith("/9j/"):
+                    mime = "image/jpeg"
+                elif img_base64.startswith("iVBOR"):
+                    mime = "image/png"
+                elif img_base64.startswith("R0lGOD"):
+                    mime = "image/gif"
+                elif img_base64.startswith("UklGR"):
+                    mime = "image/webp"
+                else:
+                    mime = "image/jpeg"
+                
+                content.append({
+                    "type": "image_url",
+                    "image_url": {"url": f"data:{mime};base64,{img_base64}"}
+                })
+            messages.append({"role": "user", "content": content})
+        else:
+            messages.append({"role": "user", "content": prompt})
         
         full_response = ""
         thinking_buffer = ""
@@ -261,10 +291,11 @@ async def stream_generate(
     prompt: str,
     system: str = "",
     temperature: float = 0.3,
+    images: list[str] = None,
 ) -> AsyncGenerator[Tuple[str, bool, Optional[str]], None]:
     """Stream response from configured LLM provider."""
     provider = _get_provider()
-    async for item in provider.stream_generate(prompt, system, temperature):
+    async for item in provider.stream_generate(prompt, system, temperature, images):
         yield item
 
 
@@ -272,7 +303,8 @@ async def generate(
     prompt: str,
     system: str = "",
     temperature: float = 0.3,
+    images: list[str] = None,
 ) -> Tuple[str, Optional[str]]:
     """Generate response from configured LLM provider."""
     provider = _get_provider()
-    return await provider.generate(prompt, system, temperature)
+    return await provider.generate(prompt, system, temperature, images)

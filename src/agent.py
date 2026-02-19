@@ -57,6 +57,7 @@ async def run_agent(
     user_id: Optional[int] = None,
     status_callback: Optional[Callable[[str], Awaitable[None]]] = None,
     max_iterations: int = 10,
+    images: list[str] = None,  # List of base64 encoded images
 ) -> tuple[str, list[dict]]:
     """
     Run the agent loop.
@@ -67,6 +68,7 @@ async def run_agent(
         user_id: Telegram user ID (for user-scoped context and tools)
         status_callback: Async callback for status updates
         max_iterations: Maximum tool call iterations
+        images: List of base64 encoded images for multimodal input
     
     Returns:
         (final_response, updated_history)
@@ -111,7 +113,10 @@ async def run_agent(
         
         import asyncio
         
-        async for token, is_thinking, thinking_content in stream_generate(full_prompt):
+        # Only pass images on first iteration
+        current_images = images if iterations == 1 else None
+        
+        async for token, is_thinking, thinking_content in stream_generate(full_prompt, images=current_images):
             current_response += token
             
             if thinking_content:

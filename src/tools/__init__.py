@@ -4,7 +4,7 @@ from typing import Optional
 from .base import Tool, ToolResult
 from .file_ops import ReadFileTool, WriteFileTool, ListDirTool
 from .shell import ExecTool, RunBashTool, RunPythonTool, KillProcessTool, ListProcessesTool
-from .search import SearchFilesTool, GrepTool
+from .search import GrepTool, FindFilesTool
 from .cron import ListCronTool, AddCronTool, RemoveCronTool
 from .memory import MemoryLogTool, MemoryReadTool, MemoryUpdateTool, UserUpdateTool
 
@@ -19,7 +19,7 @@ TOOLS = {
     "list_processes": ListProcessesTool(),
     "kill_process": KillProcessTool(),
     "grep": GrepTool(),
-    "search_files": SearchFilesTool(),
+    "find_files": FindFilesTool(),
     "list_cron": ListCronTool(),
     "add_cron": AddCronTool(),
     "remove_cron": RemoveCronTool(),

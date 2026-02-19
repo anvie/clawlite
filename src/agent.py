@@ -99,6 +99,7 @@ async def run_agent(
     iterations = 0
     accumulated_response = ""
     thinking_shown = False
+    last_tool_result = None  # Track last tool result for fallback
     
     while iterations < max_iterations:
         iterations += 1
@@ -168,6 +169,9 @@ async def run_agent(
                     else:
                         result_text = f"Error: {result.error}"
                     
+                    # Track last tool result for fallback
+                    last_tool_result = {"tool": tool_name, "result": result_text, "success": result.success}
+                    
                     # Add to prompt for next iteration (LLM will interpret this)
                     full_prompt += f"{response_part}\n\n<tool_result>\n{result_text}\n</tool_result>\n\nassistant\n"
                     # Don't add raw result to user response - let LLM interpret it
@@ -185,8 +189,17 @@ async def run_agent(
     
     # Translate response back to Indonesian if translation is enabled
     final_response = accumulated_response
+    
+    # Fallback: if response is empty or only tool calls, include last tool result
+    clean_response = re.sub(r'<tool_?call>.*?</tool_?call>', '', final_response, flags=re.DOTALL | re.IGNORECASE).strip()
+    if not clean_response and last_tool_result:
+        if last_tool_result["success"]:
+            final_response = f"Result:\n```\n{last_tool_result['result']}\n```"
+        else:
+            final_response = f"Error: {last_tool_result['result']}"
+    
     if TRANSLATION_ENABLED:
-        final_response = await translate_to_indonesian(accumulated_response)
+        final_response = await translate_to_indonesian(final_response)
     
     # Update history (store original messages, not translated)
     new_history = history + [

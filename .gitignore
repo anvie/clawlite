@@ -4,6 +4,7 @@
 # Workspace data
 workspace/*
 !workspace/.gitkeep
+!workspace/skills 
 
 # Python
 __pycache__/

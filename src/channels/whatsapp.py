@@ -27,6 +27,7 @@ try:
     from neonize.events import MessageEv as _MessageEv, ConnectedEv as _ConnectedEv, QREv as _QREv, event as _event
     from neonize.utils import build_jid as _build_jid
     from neonize.proto.waCompanionReg.WAWebProtobufsCompanionReg_pb2 import DeviceProps
+    from neonize.proto.waE2E.WAWebProtobufsE2E_pb2 import Message, ExtendedTextMessage, ContextInfo
     
     NewClient = _NewClient
     MessageEv = _MessageEv
@@ -39,6 +40,9 @@ except ImportError:
     ChatPresence = None
     ChatPresenceMedia = None
     DeviceProps = None
+    Message = None
+    ExtendedTextMessage = None
+    ContextInfo = None
 
 from .base import BaseChannel, WORKSPACE
 
@@ -184,6 +188,58 @@ class WhatsAppChannel(BaseChannel):
             return True
         except Exception as e:
             self.logger.error(f"Failed to send message to {user_id}: {e}")
+            return False
+    
+    async def send_sanitized_reply(self, ev: Any, text: str) -> bool:
+        """
+        Send a reply without inheriting AI metadata flags.
+        Constructs a clean quoted reply using only stanzaId and participant.
+        """
+        if not self.client or not self.connected:
+            self.logger.error("WhatsApp not connected")
+            return False
+        
+        try:
+            # Extract identifiers from event
+            info = ev.Info if hasattr(ev, 'Info') else getattr(ev, 'info', None)
+            message_id = info.ID if hasattr(info, 'ID') else getattr(info, 'id', '')
+            
+            # Get sender JID
+            source = info.MessageSource if hasattr(info, 'MessageSource') else getattr(info, 'message_source', None)
+            sender = source.Sender if hasattr(source, 'Sender') else getattr(source, 'sender', None)
+            chat = source.Chat if hasattr(source, 'Chat') else getattr(source, 'chat', None)
+            
+            # Convert to string JID
+            if hasattr(sender, 'ToNonAD'):
+                sender_jid = sender.ToNonAD().String()
+            else:
+                sender_jid = str(sender)
+            
+            # Build clean ContextInfo (without quotedMessage to avoid AI metadata)
+            clean_context = ContextInfo(
+                stanzaId=message_id,
+                participant=sender_jid
+            )
+            
+            # Create ExtendedTextMessage with clean context
+            extended_text = ExtendedTextMessage(
+                text=text,
+                contextInfo=clean_context
+            )
+            
+            # Create final Message
+            clean_msg = Message(
+                extendedTextMessage=extended_text
+            )
+            
+            # Send sanitized message
+            await asyncio.get_event_loop().run_in_executor(
+                None,
+                lambda: self.client.send_message(chat, message=clean_msg)
+            )
+            return True
+        except Exception as e:
+            self.logger.error(f"Failed to send sanitized reply: {e}")
             return False
     
     async def send_typing(self, user_id: str, typing: bool = True) -> bool:

@@ -1,25 +1,24 @@
 # ClawLite
 
-A lightweight agentic AI assistant. Telegram bot powered by LLMs with tool-calling capabilities.
+A lightweight agentic AI assistant with multi-channel support. Connect via Telegram or WhatsApp, powered by LLMs with tool-calling capabilities.
 
 ## Features
 
+- **Multi-channel** - Telegram and WhatsApp support (run one or both)
 - **Multi-provider LLM** - Works with Ollama (local) or OpenRouter (cloud: Gemini, Claude, etc.)
 - **Tool calling** - Can read/write files, search, and execute commands
 - **Multi-user sessions** - Each user gets isolated persistent memory
 - **Workspace isolation** - Only has access to configured workspace directory
-- **Streaming** - Real-time thinking and response streaming to Telegram
-- **Optional Docker** - Run directly with Python or in a sandboxed Docker container
+- **Streaming** - Real-time thinking and response streaming
+- **Docker ready** - Run in a sandboxed container with security constraints
 
 ## Quick Start
 
 ### Prerequisites
 
 - Python 3.10+
-- Telegram bot token from [@BotFather](https://t.me/BotFather)
-- **One of:**
-  - Ollama running (locally or remote)
-  - OpenRouter API key
+- **Messaging:** Telegram bot token and/or WhatsApp (phone to scan QR)
+- **LLM:** Ollama running (locally or remote) OR OpenRouter API key
 
 ### Setup
 
@@ -27,11 +26,54 @@ A lightweight agentic AI assistant. Telegram bot powered by LLMs with tool-calli
 git clone https://github.com/anvie/clawlite.git
 cd clawlite
 cp .env.example .env
+# Edit .env with your configuration
 ```
 
-### Configure LLM Provider
+### Run with Docker (recommended)
 
-**Option 1: Ollama (local/self-hosted)**
+```bash
+docker compose up -d --build
+docker logs -f clawlite-agent
+```
+
+### Run with Python
+
+```bash
+pip install -r requirements.txt
+python -m src.main
+```
+
+## Channel Configuration
+
+### Telegram Only (default)
+
+```env
+ENABLED_CHANNELS=telegram
+TELEGRAM_TOKEN=your_bot_token_here
+TELEGRAM_ALLOWED_USERS=123456,789012  # optional
+```
+
+### WhatsApp Only
+
+```env
+ENABLED_CHANNELS=whatsapp
+WHATSAPP_SESSION_DIR=/data/whatsapp
+WHATSAPP_ALLOWED_USERS=628xxx,628yyy  # optional
+```
+
+On first run, scan the QR code shown in logs with WhatsApp on your phone.
+
+### Both Channels
+
+```env
+ENABLED_CHANNELS=telegram,whatsapp
+TELEGRAM_TOKEN=your_bot_token_here
+WHATSAPP_SESSION_DIR=/data/whatsapp
+```
+
+## LLM Configuration
+
+### Option 1: Ollama (local/self-hosted)
 
 ```env
 LLM_PROVIDER=ollama
@@ -39,7 +81,7 @@ OLLAMA_HOST=http://localhost:11434
 OLLAMA_MODEL=llama3.2:3b
 ```
 
-**Option 2: OpenRouter (cloud)**
+### Option 2: OpenRouter (cloud)
 
 ```env
 LLM_PROVIDER=openrouter
@@ -48,22 +90,6 @@ OPENROUTER_MODEL=google/gemini-2.5-pro-preview-03-25
 ```
 
 See [OpenRouter Models](https://openrouter.ai/models) for available models.
-
-### Run with Python
-
-```bash
-pip install -r requirements.txt
-python -m src.bot
-```
-
-### Run with Docker (optional)
-
-For sandboxed execution with security constraints:
-
-```bash
-docker-compose up -d --build
-docker-compose logs -f
-```
 
 ## Available Tools
 
@@ -79,54 +105,36 @@ docker-compose logs -f
 | `memory_update` | Update long-term memory |
 | `user_update` | Update user profile |
 
-## Security (Docker mode)
-
-When running in Docker, additional security constraints apply:
-
-- Non-root user inside container
-- Read-only root filesystem
-- No privilege escalation (`no-new-privileges`)
-- All capabilities dropped
-- Memory limited to 512MB
-- CPU limited to 1 core
-- Command allowlist (no rm -rf, sudo, etc.)
-- Path traversal protection
-
-## Telegram Commands
-
-- `/start` - Welcome message
-- `/clear` - Clear conversation history
-- `/tools` - List available tools
-- `/workspace` - Show workspace contents
-
 ## Architecture
 
 ```
-+----------------------------------------------------------+
-|                       ClawLite                           |
-|  +----------------------------------------------------+  |
-|  |  Telegram Bot                                      |--+--> Telegram API
-|  |    |                                               |  |
-|  |    v                                               |  |
-|  |  Context Loader (per-user)                         |  |
-|  |    |  - Load SOUL.md, AGENTS.md (shared)           |  |
-|  |    |  - Load USER.md, MEMORY.md (per-user)         |  |
-|  |    v                                               |  |
-|  |  Agent Loop                                        |  |
-|  |    |                                               |  |
-|  |    +---> Tool Executor ---> ./workspace/users/{id} |  |
-|  |    |                                               |  |
-|  |    v                                               |  |
-|  |  LLM Client (multi-provider)                       |  |
-|  |    +-- Ollama ----------------------------------|--+--> Local LLM
-|  |    +-- OpenRouter -----------------------------|--+--> Cloud LLM
-|  +----------------------------------------------------+  |
-+----------------------------------------------------------+
++------------------------------------------------------------------+
+|                          ClawLite                                |
+|  +------------------------------------------------------------+  |
+|  |  Channel Layer                                             |  |
+|  |    +-- Telegram Channel ------> Telegram API               |  |
+|  |    +-- WhatsApp Channel ------> WhatsApp (neonize)         |  |
+|  |           |                                                |  |
+|  |           v                                                |  |
+|  |  Context Loader (per-user)                                 |  |
+|  |    |  - Load SOUL.md, AGENTS.md (shared)                   |  |
+|  |    |  - Load USER.md, MEMORY.md (per-user)                 |  |
+|  |    v                                                       |  |
+|  |  Agent Loop                                                |  |
+|  |    |                                                       |  |
+|  |    +---> Tool Executor ---> ./workspace/users/{id}         |  |
+|  |    |                                                       |  |
+|  |    v                                                       |  |
+|  |  LLM Client (multi-provider)                               |  |
+|  |    +-- Ollama ---------------------------------> Local LLM |  |
+|  |    +-- OpenRouter -----------------------------> Cloud LLM |  |
+|  +------------------------------------------------------------+  |
++------------------------------------------------------------------+
 ```
 
 ## Multi-User Sessions
 
-Each Telegram user gets their own isolated memory space:
+Each user gets their own isolated memory space:
 
 ```
 workspace/
@@ -147,25 +155,42 @@ workspace/
 - Memory tools read/write to the user's own folder
 - Context is loaded per-user: shared files + user's files
 
-**Memory tools:**
-- `memory_log` - Append notes to today's daily log
-- `memory_read` - Read `MEMORY.md` or a specific day's log
-- `memory_update` - Append to long-term memory
-- `user_update` - Update user profile (`USER.md`)
+## Telegram Commands
 
-## Configuration
+- `/start` - Welcome message
+- `/clear` - Clear conversation history
+- `/tools` - List available tools
+- `/workspace` - Show workspace contents
+
+## Configuration Reference
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `TELEGRAM_TOKEN` | Bot token from @BotFather | required |
+| `ENABLED_CHANNELS` | Channels to enable (`telegram`, `whatsapp`) | `telegram` |
 | `LLM_PROVIDER` | LLM provider (`ollama` or `openrouter`) | `ollama` |
+| `TELEGRAM_TOKEN` | Bot token from @BotFather | - |
+| `TELEGRAM_ALLOWED_USERS` | Allowed Telegram user IDs | empty (all) |
+| `WHATSAPP_SESSION_DIR` | WhatsApp session storage | `/data/whatsapp` |
+| `WHATSAPP_ALLOWED_USERS` | Allowed phone numbers | empty (all) |
+| `ALLOWED_USERS` | Global fallback allowlist | empty (all) |
 | `OLLAMA_HOST` | Ollama server URL | `http://localhost:11434` |
 | `OLLAMA_MODEL` | Ollama model name | `llama3.2:3b` |
 | `OPENROUTER_API_KEY` | OpenRouter API key | - |
 | `OPENROUTER_MODEL` | OpenRouter model ID | `google/gemini-2.5-pro-preview-03-25` |
-| `ALLOWED_USERS` | Comma-separated user IDs | empty (all allowed) |
-| `WORKSPACE_DIR` | Workspace directory | `/workspace` |
-| `TRANSLATION_ENABLED` | Enable ID↔EN translation | `false` |
+| `WORKSPACE_PATH` | Workspace directory | `/workspace` |
+
+## Security (Docker mode)
+
+When running in Docker, additional security constraints apply:
+
+- Non-root user inside container
+- Read-only root filesystem
+- No privilege escalation (`no-new-privileges`)
+- All capabilities dropped
+- Memory limited to 512MB
+- CPU limited to 1 core
+- Command allowlist (no rm -rf, sudo, etc.)
+- Path traversal protection
 
 ## Remote Ollama
 

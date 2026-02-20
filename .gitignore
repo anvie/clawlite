@@ -30,3 +30,6 @@ clawlite.key
 clawlite.pub
 *.key
 *.key.pub
+
+# WhatsApp session data
+data/whatsapp/

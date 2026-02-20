@@ -7,3 +7,4 @@ python-telegram-bot==21.0
 
 # WhatsApp (optional - comment out if not needed)
 neonize>=0.3.14
+qrcode>=7.4

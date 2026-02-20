@@ -105,7 +105,12 @@ async def run_channels():
     
     try:
         # Wait for channels to start
-        await asyncio.gather(*start_tasks, return_exceptions=True)
+        results = await asyncio.gather(*start_tasks, return_exceptions=True)
+        
+        # Log any errors from channel starts
+        for i, result in enumerate(results):
+            if isinstance(result, Exception):
+                logger.error(f"❌ Channel {active_channels[i].name} failed to start: {result}")
         
         # Keep running until shutdown
         logger.info("🚀 All channels started! Waiting for messages...")

@@ -1,32 +1,36 @@
 """
 ClawLite - WhatsApp Channel
-WhatsApp implementation using neonize library
+WhatsApp implementation using neonize library (sync client in thread)
 """
 
 import os
 import base64
 import asyncio
 import logging
+import threading
 from datetime import datetime
-from typing import Optional, Callable, Any, TYPE_CHECKING
+from typing import Optional, Callable, Any
 from pathlib import Path
+from queue import Queue
 
 NEONIZE_AVAILABLE = False
-NewAClient = None
+NewClient = None
 MessageEv = None
 ConnectedEv = None
-DisconnectedEv = None
+QREv = None
+event = None
 build_jid = None
 
 try:
-    from neonize.aioze.client import NewAClient as _NewAClient
-    from neonize.aioze.events import MessageEv as _MessageEv, ConnectedEv as _ConnectedEv, DisconnectedEv as _DisconnectedEv
+    from neonize.client import NewClient as _NewClient
+    from neonize.events import MessageEv as _MessageEv, ConnectedEv as _ConnectedEv, QREv as _QREv, event as _event
     from neonize.utils import build_jid as _build_jid
     
-    NewAClient = _NewAClient
+    NewClient = _NewClient
     MessageEv = _MessageEv
     ConnectedEv = _ConnectedEv
-    DisconnectedEv = _DisconnectedEv
+    QREv = _QREv
+    event = _event
     build_jid = _build_jid
     NEONIZE_AVAILABLE = True
 except ImportError:
@@ -41,7 +45,7 @@ IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.gif', '.webp'}
 
 
 class WhatsAppChannel(BaseChannel):
-    """WhatsApp messaging channel using neonize."""
+    """WhatsApp messaging channel using neonize (sync client in thread)."""
     
     name = "whatsapp"
     
@@ -53,58 +57,96 @@ class WhatsAppChannel(BaseChannel):
         
         # Configuration
         self.session_dir = os.getenv("WHATSAPP_SESSION_DIR", "/data/whatsapp")
-        self.db_path = os.path.join(self.session_dir, "neonize.db")
         
         # Ensure session directory exists
         os.makedirs(self.session_dir, exist_ok=True)
         
         # Client instance
-        self.client: Optional[NewAClient] = None
+        self.client: Optional[Any] = None
         self.connected = False
         self.conversations: dict[str, list[dict]] = {}
         
-        # Status message tracking (for editing)
-        self._status_messages: dict[str, str] = {}
+        # Thread management
+        self._thread: Optional[threading.Thread] = None
+        self._stop_event = threading.Event()
+        self._message_queue: Queue = Queue()
+        self._loop: Optional[asyncio.AbstractEventLoop] = None
     
     async def start(self) -> None:
-        """Start the WhatsApp client."""
+        """Start the WhatsApp client in a background thread."""
         self.logger.info("Starting WhatsApp channel...")
+        self._loop = asyncio.get_running_loop()
         
-        # Initialize client
-        self.client = NewAClient(
-            name="clawlite",
-            database=self.db_path,
-        )
+        # Start client in background thread
+        self._thread = threading.Thread(target=self._run_client, daemon=True)
+        self._thread.start()
         
-        # Register event handlers
-        @self.client.event(ConnectedEv)
-        async def on_connected(client: NewAClient, event: ConnectedEv):
-            self.connected = True
-            self.logger.info("✅ WhatsApp connected!")
-            if hasattr(event, 'device'):
-                self.logger.info(f"📱 Device: {event.device}")
+        # Start message processor
+        asyncio.create_task(self._process_messages())
         
-        @self.client.event(DisconnectedEv)
-        async def on_disconnected(client: NewAClient, event: DisconnectedEv):
-            self.connected = False
-            self.logger.warning("⚠️ WhatsApp disconnected")
-        
-        @self.client.event(MessageEv)
-        async def on_message(client: NewAClient, event: MessageEv):
-            await self._handle_message_event(event)
-        
-        # Connect (will show QR code if not logged in)
-        self.logger.info("Connecting to WhatsApp...")
-        self.logger.info("📱 Scan QR code with your phone if prompted")
-        
-        await self.client.connect()
+        self.logger.info("WhatsApp channel started (running in background thread)")
+    
+    def _run_client(self) -> None:
+        """Run the neonize client in a background thread."""
+        try:
+            # Change to session directory
+            os.chdir(self.session_dir)
+            
+            self.logger.info("Creating WhatsApp client...")
+            self.client = NewClient(name="clawlite")
+            
+            # Register event handlers
+            @self.client.event(QREv)
+            def on_qr(client, ev):
+                self.logger.info("📱 QR Code received! Scan with WhatsApp on your phone:")
+                # QR code is automatically printed to stdout by neonize
+            
+            @self.client.event(ConnectedEv)
+            def on_connected(client, ev):
+                self.connected = True
+                self.logger.info("✅ WhatsApp connected!")
+            
+            @self.client.event(MessageEv)
+            def on_message(client, ev):
+                # Queue message for async processing
+                self._message_queue.put(ev)
+            
+            self.logger.info("Connecting to WhatsApp...")
+            self.logger.info("📱 Scan QR code if prompted (check container logs)")
+            
+            self.client.connect()
+            
+            # Keep running until stop event
+            while not self._stop_event.is_set():
+                event.wait(timeout=1)
+                if self._stop_event.is_set():
+                    break
+                    
+        except Exception as e:
+            self.logger.error(f"WhatsApp client error: {e}")
+    
+    async def _process_messages(self) -> None:
+        """Process messages from the queue."""
+        while True:
+            try:
+                # Check queue with timeout
+                await asyncio.sleep(0.1)
+                
+                while not self._message_queue.empty():
+                    ev = self._message_queue.get_nowait()
+                    await self._handle_message_event(ev)
+                    
+            except Exception as e:
+                self.logger.error(f"Message processing error: {e}")
+                await asyncio.sleep(1)
     
     async def stop(self) -> None:
         """Stop the WhatsApp client."""
-        if self.client:
-            # neonize handles cleanup automatically
-            self.connected = False
-            self.logger.info("WhatsApp channel stopped")
+        self._stop_event.set()
+        if self._thread and self._thread.is_alive():
+            self._thread.join(timeout=5)
+        self.connected = False
+        self.logger.info("WhatsApp channel stopped")
     
     async def send_message(self, user_id: str, text: str, **kwargs) -> bool:
         """Send a message to a user/group."""
@@ -114,7 +156,11 @@ class WhatsAppChannel(BaseChannel):
         
         try:
             jid = self._parse_jid(user_id)
-            await self.client.send_message(jid, text=text)
+            # Run sync send in thread
+            await asyncio.get_event_loop().run_in_executor(
+                None, 
+                lambda: self.client.send_message(jid, text)
+            )
             return True
         except Exception as e:
             self.logger.error(f"Failed to send message to {user_id}: {e}")
@@ -122,197 +168,93 @@ class WhatsAppChannel(BaseChannel):
     
     def _parse_jid(self, user_id: str) -> str:
         """Parse user ID to WhatsApp JID format."""
-        # Already a JID
         if "@" in user_id:
             return user_id
-        
-        # Phone number - convert to JID
         phone = user_id.lstrip("+").replace("-", "").replace(" ", "")
         return build_jid(phone)
     
-    def _extract_sender_id(self, event: Any) -> str:
+    def _extract_sender_id(self, ev: Any) -> str:
         """Extract sender ID from message event."""
         try:
-            if hasattr(event, 'Info') and hasattr(event.Info, 'MessageSource'):
-                source = event.Info.MessageSource
+            if hasattr(ev, 'Info') and hasattr(ev.Info, 'MessageSource'):
+                source = ev.Info.MessageSource
                 if hasattr(source, 'Sender'):
                     return str(source.Sender)
-            # Fallback
-            if hasattr(event, 'info') and hasattr(event.info, 'message_source'):
-                source = event.info.message_source
-                if hasattr(source, 'sender'):
-                    return str(source.sender)
         except Exception:
             pass
         return "unknown"
     
-    def _extract_chat_id(self, event: Any) -> str:
+    def _extract_chat_id(self, ev: Any) -> str:
         """Extract chat ID from message event."""
         try:
-            if hasattr(event, 'Info') and hasattr(event.Info, 'MessageSource'):
-                source = event.Info.MessageSource
+            if hasattr(ev, 'Info') and hasattr(ev.Info, 'MessageSource'):
+                source = ev.Info.MessageSource
                 if hasattr(source, 'Chat'):
                     return str(source.Chat)
-            # Fallback
-            if hasattr(event, 'info') and hasattr(event.info, 'message_source'):
-                source = event.info.message_source
-                if hasattr(source, 'chat'):
-                    return str(source.chat)
         except Exception:
             pass
         return "unknown"
     
-    def _extract_text(self, event: Any) -> Optional[str]:
+    def _extract_text(self, ev: Any) -> Optional[str]:
         """Extract text content from message event."""
         try:
-            msg = event.Message if hasattr(event, 'Message') else event.message
+            msg = ev.Message
             
-            # Plain text conversation
             if hasattr(msg, 'conversation') and msg.conversation:
                 return msg.conversation
-            
-            # Extended text message
             if hasattr(msg, 'extendedTextMessage') and msg.extendedTextMessage:
                 return msg.extendedTextMessage.text
-            
-            # Image caption
             if hasattr(msg, 'imageMessage') and msg.imageMessage:
                 return msg.imageMessage.caption or ""
-            
-            # Document caption
             if hasattr(msg, 'documentMessage') and msg.documentMessage:
                 return msg.documentMessage.caption or ""
-            
-            # Video caption
             if hasattr(msg, 'videoMessage') and msg.videoMessage:
                 return msg.videoMessage.caption or ""
-                
         except Exception as e:
             self.logger.debug(f"Error extracting text: {e}")
-        
         return None
     
-    async def _download_media(self, event: Any, user_id: str) -> Optional[tuple[str, bytes]]:
-        """Download media from message, return (relative_path, data)."""
-        try:
-            msg = event.Message if hasattr(event, 'Message') else event.message
-            
-            media_data = None
-            filename = None
-            
-            # Image
-            if hasattr(msg, 'imageMessage') and msg.imageMessage:
-                media_data = await self.client.download_any(msg)
-                filename = f"image_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg"
-            
-            # Document
-            elif hasattr(msg, 'documentMessage') and msg.documentMessage:
-                media_data = await self.client.download_any(msg)
-                filename = msg.documentMessage.fileName or f"doc_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-            
-            # Video
-            elif hasattr(msg, 'videoMessage') and msg.videoMessage:
-                media_data = await self.client.download_any(msg)
-                filename = f"video_{datetime.now().strftime('%Y%m%d_%H%M%S')}.mp4"
-            
-            # Audio
-            elif hasattr(msg, 'audioMessage') and msg.audioMessage:
-                media_data = await self.client.download_any(msg)
-                filename = f"audio_{datetime.now().strftime('%Y%m%d_%H%M%S')}.ogg"
-            
-            if media_data and filename:
-                # Save to workspace
-                upload_dir = os.path.join(WORKSPACE, "uploads", user_id)
-                os.makedirs(upload_dir, exist_ok=True)
-                
-                file_path = os.path.join(upload_dir, filename)
-                with open(file_path, "wb") as f:
-                    f.write(media_data)
-                
-                relative_path = os.path.relpath(file_path, WORKSPACE)
-                return relative_path, media_data
-                
-        except Exception as e:
-            self.logger.error(f"Error downloading media: {e}")
-        
-        return None
-    
-    async def _handle_message_event(self, event: Any) -> None:
+    async def _handle_message_event(self, ev: Any) -> None:
         """Handle incoming WhatsApp message."""
         try:
-            sender_id = self._extract_sender_id(event)
-            chat_id = self._extract_chat_id(event)
-            text = self._extract_text(event)
+            sender_id = self._extract_sender_id(ev)
+            chat_id = self._extract_chat_id(ev)
+            text = self._extract_text(ev)
             
-            # Skip if no sender
             if sender_id == "unknown":
                 return
             
-            # Check authorization
             if not self.is_allowed(sender_id):
-                self.logger.debug(f"Ignoring message from unauthorized user: {sender_id}")
+                self.logger.debug(f"Ignoring message from unauthorized: {sender_id}")
                 return
             
-            # Use chat_id as the user identifier for conversation context
             user_id = chat_id if chat_id != "unknown" else sender_id
             
             self.logger.info(f"📩 [{user_id}]: {text[:100] if text else '(media)'}...")
             
-            # Check for media
-            images = None
-            file_context = None
-            
-            media_result = await self._download_media(event, user_id)
-            if media_result:
-                relative_path, media_data = media_result
-                
-                # Check if it's an image
-                _, ext = os.path.splitext(relative_path.lower())
-                if ext in IMAGE_EXTENSIONS:
-                    images = [base64.b64encode(media_data).decode("utf-8")]
-                    file_context = f"[User sent an image which is now visible to you. Saved at: {relative_path}]"
-                else:
-                    file_context = f"[User sent a file: {relative_path}]\nThe file has been saved to workspace."
-            
-            # Combine text with file context
-            full_message = ""
-            if file_context:
-                full_message = file_context
-                if text:
-                    full_message += f"\n\n{text}"
-            else:
-                full_message = text or ""
-            
-            if not full_message:
-                return  # Nothing to process
+            if not text:
+                return
             
             # Get conversation history
             if user_id not in self.conversations:
                 self.conversations[user_id] = []
             
-            # Send "thinking" status
+            # Send thinking status
             await self.send_message(user_id, "🧠 _Thinking..._")
             
-            # Status callback for updates
-            async def update_status(status_text: str):
-                # WhatsApp doesn't support editing, so we just log
-                self.logger.debug(f"Status update: {status_text[:50]}...")
-            
             try:
-                # Import agent
                 from ..agent import run_agent
                 
                 response, new_history = await run_agent(
-                    full_message,
+                    text,
                     self.conversations[user_id],
                     user_id=user_id,
-                    status_callback=update_status,
-                    images=images,
+                    status_callback=lambda x: None,
+                    images=None,
                 )
                 
                 self.conversations[user_id] = new_history
                 
-                # Clean up response
                 import re
                 final_text = re.sub(
                     r'<tool_?call>.*?</tool_?call>',
@@ -323,13 +265,12 @@ class WhatsAppChannel(BaseChannel):
                 final_text = final_text.strip()
                 
                 if final_text:
-                    # Send response (split if too long)
                     await self._send_long_message(user_id, final_text)
                 else:
                     await self.send_message(user_id, "✅ Done!")
                     
             except Exception as e:
-                self.logger.error(f"Error processing message from {user_id}: {e}")
+                self.logger.error(f"Error processing message: {e}")
                 await self.send_message(user_id, f"❌ Error: {str(e)[:500]}")
                 
         except Exception as e:
@@ -342,7 +283,6 @@ class WhatsAppChannel(BaseChannel):
                 await self.send_message(user_id, text)
                 break
             
-            # Find break point
             break_point = text.rfind('\n', 0, max_len)
             if break_point < max_len // 2:
                 break_point = text.rfind(' ', 0, max_len)
@@ -351,6 +291,4 @@ class WhatsAppChannel(BaseChannel):
             
             await self.send_message(user_id, text[:break_point])
             text = text[break_point:].strip()
-            
-            # Small delay between chunks
             await asyncio.sleep(0.5)

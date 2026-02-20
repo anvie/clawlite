@@ -93,17 +93,47 @@ See [OpenRouter Models](https://openrouter.ai/models) for available models.
 
 ## Available Tools
 
-| Tool | Description |
-|------|-------------|
-| `read_file` | Read file contents |
-| `write_file` | Create/write files |
-| `list_dir` | List directory contents |
-| `exec` | Execute safe shell commands |
-| `search_files` | Search text in files |
-| `memory_log` | Append to today's memory log |
-| `memory_read` | Read long-term or daily memory |
-| `memory_update` | Update long-term memory |
-| `user_update` | Update user profile |
+### File Operations
+
+| Tool | Description | Parameters |
+|------|-------------|------------|
+| `read_file` | Read file contents | `path` |
+| `write_file` | Create/update files | `path`, `content` |
+| `list_dir` | List directory contents | `path` (default: `.`) |
+
+### Shell Operations
+
+| Tool | Description | Parameters |
+|------|-------------|------------|
+| `exec` | Execute allowed commands (cat, ls, grep, find, echo, date, head, tail, wc, curl) | `command` |
+| `run_bash` | Run a bash script | `script` |
+| `run_python` | Execute Python code | `code` |
+| `list_processes` | List running processes | - |
+| `kill_process` | Terminate a process | `target` (PID or name) |
+
+### Search
+
+| Tool | Description | Parameters |
+|------|-------------|------------|
+| `grep` | Search text in files (ripgrep) | `pattern`, `path`, `flags` (-i, -w, -l, -c) |
+| `find_files` | Find files by glob pattern | `name_pattern`, `path`, `recursive`, `type` |
+
+### Scheduling
+
+| Tool | Description | Parameters |
+|------|-------------|------------|
+| `list_cron` | List cron jobs | - |
+| `add_cron` | Add a cron job | `schedule`, `command`, `comment` |
+| `remove_cron` | Remove a cron job | `pattern` |
+
+### Memory (User-Scoped)
+
+| Tool | Description | Parameters |
+|------|-------------|------------|
+| `memory_log` | Append to today's daily log | `content` |
+| `memory_read` | Read MEMORY.md or specific day | `date` (optional, YYYY-MM-DD) |
+| `memory_update` | Append to long-term memory | `content` |
+| `user_update` | Update user profile | `content` |
 
 ## Architecture
 

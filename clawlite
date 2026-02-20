@@ -1,0 +1,35 @@
+#!/usr/bin/env python3
+"""ClawLite CLI entry point."""
+
+import sys
+import os
+
+# Add src to path
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
+
+def main():
+    if len(sys.argv) < 2:
+        print("Usage: clawlite <command> [args...]")
+        print()
+        print("Commands:")
+        print("  skill    Manage skills (list, install, remove, info)")
+        print("  run      Start the bot (same as python -m src.main)")
+        sys.exit(1)
+    
+    command = sys.argv[1]
+    sys.argv = sys.argv[1:]  # Shift args
+    
+    if command == "skill":
+        from cli.skill_manager import main as skill_main
+        skill_main()
+    elif command == "run":
+        from main import main as run_main
+        import asyncio
+        asyncio.run(run_main())
+    else:
+        print(f"Unknown command: {command}")
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()

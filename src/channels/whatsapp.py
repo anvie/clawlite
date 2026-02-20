@@ -26,6 +26,7 @@ try:
     from neonize.client import NewClient as _NewClient, ChatPresence, ChatPresenceMedia
     from neonize.events import MessageEv as _MessageEv, ConnectedEv as _ConnectedEv, QREv as _QREv, event as _event
     from neonize.utils import build_jid as _build_jid
+    from neonize.proto.waCompanionReg.WAWebProtobufsCompanionReg_pb2 import DeviceProps
     
     NewClient = _NewClient
     MessageEv = _MessageEv
@@ -37,6 +38,7 @@ try:
 except ImportError:
     ChatPresence = None
     ChatPresenceMedia = None
+    DeviceProps = None
 
 from .base import BaseChannel, WORKSPACE
 
@@ -95,7 +97,12 @@ class WhatsAppChannel(BaseChannel):
             os.chdir(self.session_dir)
             
             self.logger.info("Creating WhatsApp client...")
-            self.client = NewClient(name="clawlite")
+            # Set device props to look like Chrome browser to avoid AI labeling
+            props = DeviceProps(
+                os="Windows",
+                platformType=DeviceProps.PlatformType.CHROME,
+            )
+            self.client = NewClient(name="Browser", props=props)
             
             # Register event handlers
             @self.client.event(QREv)

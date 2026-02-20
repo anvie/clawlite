@@ -33,3 +33,6 @@ clawlite.pub
 
 # WhatsApp session data
 data/whatsapp/
+
+# Python virtual environment
+.venv/

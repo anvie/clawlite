@@ -8,6 +8,7 @@ import base64
 import asyncio
 import logging
 import threading
+import re
 from datetime import datetime
 from typing import Optional, Callable, Any
 from pathlib import Path
@@ -84,12 +85,12 @@ class WhatsAppChannel(BaseChannel):
         # Start message processor
         asyncio.create_task(self._process_messages())
         
-        self.logger.info("WhatsApp channel started (running in background thread)")
+        self.logger.info("WhatsApp channel started")
     
     def _run_client(self) -> None:
         """Run the neonize client in a background thread."""
         try:
-            # Change to session directory
+            # Change to session directory for session persistence
             os.chdir(self.session_dir)
             
             self.logger.info("Creating WhatsApp client...")
@@ -99,7 +100,6 @@ class WhatsAppChannel(BaseChannel):
             @self.client.event(QREv)
             def on_qr(client, ev):
                 self.logger.info("📱 QR Code received! Scan with WhatsApp on your phone:")
-                # QR code is automatically printed to stdout by neonize
             
             @self.client.event(ConnectedEv)
             def on_connected(client, ev):
@@ -108,11 +108,25 @@ class WhatsAppChannel(BaseChannel):
             
             @self.client.event(MessageEv)
             def on_message(client, ev):
-                # Queue message for async processing
-                self._message_queue.put(ev)
+                try:
+                    # Ignore our own messages
+                    info = ev.Info if hasattr(ev, 'Info') else getattr(ev, 'info', None)
+                    if info:
+                        is_from_me = getattr(info, 'IsFromMe', False) or getattr(info, 'is_from_me', False)
+                        if is_from_me:
+                            return
+                    
+                    text = self._extract_text(ev)
+                    if text:
+                        sender = self._extract_sender_id(ev)
+                        self.logger.info(f"📨 [{sender}]: {text[:50]}...")
+                        self._message_queue.put(ev)
+                        
+                except Exception as e:
+                    self.logger.error(f"Error processing message event: {e}")
             
             self.logger.info("Connecting to WhatsApp...")
-            self.logger.info("📱 Scan QR code if prompted (check container logs)")
+            self.logger.info("📱 Scan QR code if prompted")
             
             self.client.connect()
             
@@ -129,7 +143,6 @@ class WhatsAppChannel(BaseChannel):
         """Process messages from the queue."""
         while True:
             try:
-                # Check queue with timeout
                 await asyncio.sleep(0.1)
                 
                 while not self._message_queue.empty():
@@ -156,7 +169,6 @@ class WhatsAppChannel(BaseChannel):
         
         try:
             jid = self._parse_jid(user_id)
-            # Run sync send in thread
             await asyncio.get_event_loop().run_in_executor(
                 None, 
                 lambda: self.client.send_message(jid, text)
@@ -174,23 +186,29 @@ class WhatsAppChannel(BaseChannel):
         return build_jid(phone)
     
     def _extract_sender_id(self, ev: Any) -> str:
-        """Extract sender ID from message event."""
+        """Extract sender ID (phone number) from message event."""
         try:
             if hasattr(ev, 'Info') and hasattr(ev.Info, 'MessageSource'):
                 source = ev.Info.MessageSource
                 if hasattr(source, 'Sender'):
-                    return str(source.Sender)
+                    sender = source.Sender
+                    if hasattr(sender, 'User'):
+                        return str(sender.User)
+                    return str(sender).split('@')[0].split(':')[0]
         except Exception:
             pass
         return "unknown"
     
     def _extract_chat_id(self, ev: Any) -> str:
-        """Extract chat ID from message event."""
+        """Extract chat ID (phone number or group) from message event."""
         try:
             if hasattr(ev, 'Info') and hasattr(ev.Info, 'MessageSource'):
                 source = ev.Info.MessageSource
                 if hasattr(source, 'Chat'):
-                    return str(source.Chat)
+                    chat = source.Chat
+                    if hasattr(chat, 'User'):
+                        return str(chat.User)
+                    return str(chat).split('@')[0].split(':')[0]
         except Exception:
             pass
         return "unknown"
@@ -210,8 +228,8 @@ class WhatsAppChannel(BaseChannel):
                 return msg.documentMessage.caption or ""
             if hasattr(msg, 'videoMessage') and msg.videoMessage:
                 return msg.videoMessage.caption or ""
-        except Exception as e:
-            self.logger.debug(f"Error extracting text: {e}")
+        except Exception:
+            pass
         return None
     
     async def _handle_message_event(self, ev: Any) -> None:
@@ -221,19 +239,15 @@ class WhatsAppChannel(BaseChannel):
             chat_id = self._extract_chat_id(ev)
             text = self._extract_text(ev)
             
-            if sender_id == "unknown":
+            if sender_id == "unknown" or not text:
                 return
             
             if not self.is_allowed(sender_id):
-                self.logger.debug(f"Ignoring message from unauthorized: {sender_id}")
+                self.logger.debug(f"Ignoring unauthorized: {sender_id}")
                 return
             
             user_id = chat_id if chat_id != "unknown" else sender_id
-            
-            self.logger.info(f"📩 [{user_id}]: {text[:100] if text else '(media)'}...")
-            
-            if not text:
-                return
+            self.logger.info(f"📩 Processing [{user_id}]: {text[:50]}...")
             
             # Get conversation history
             if user_id not in self.conversations:
@@ -245,17 +259,19 @@ class WhatsAppChannel(BaseChannel):
             try:
                 from ..agent import run_agent
                 
+                async def noop_status(x): pass
+                
                 response, new_history = await run_agent(
                     text,
                     self.conversations[user_id],
                     user_id=user_id,
-                    status_callback=lambda x: None,
+                    status_callback=noop_status,
                     images=None,
                 )
                 
                 self.conversations[user_id] = new_history
                 
-                import re
+                # Clean tool calls from response
                 final_text = re.sub(
                     r'<tool_?call>.*?</tool_?call>',
                     '',
@@ -270,11 +286,11 @@ class WhatsAppChannel(BaseChannel):
                     await self.send_message(user_id, "✅ Done!")
                     
             except Exception as e:
-                self.logger.error(f"Error processing message: {e}")
+                self.logger.error(f"Agent error: {e}")
                 await self.send_message(user_id, f"❌ Error: {str(e)[:500]}")
                 
         except Exception as e:
-            self.logger.error(f"Error in message handler: {e}")
+            self.logger.error(f"Message handler error: {e}")
     
     async def _send_long_message(self, user_id: str, text: str, max_len: int = 4000) -> None:
         """Send long text in chunks."""

@@ -27,6 +27,9 @@ git clone https://github.com/anvie/clawlite.git
 cd clawlite
 cp .env.example .env
 # Edit .env with your configuration
+
+# Copy workspace templates (optional but recommended)
+cp templates/*.md workspace/
 ```
 
 ### Run with Docker (recommended)
@@ -161,6 +164,25 @@ See [OpenRouter Models](https://openrouter.ai/models) for available models.
 |  +------------------------------------------------------------+  |
 +------------------------------------------------------------------+
 ```
+
+## Workspace Configuration
+
+The `workspace/` directory contains configuration and user data:
+
+| File | Purpose | Scope |
+|------|---------|-------|
+| `SOUL.md` | Bot persona and communication style | Shared |
+| `AGENTS.md` | Bot rules and behavior guidelines | Shared |
+| `TOOLS.md` | Tool notes, servers, common commands | Shared |
+| `users/{id}/` | Per-user memory and preferences | Per-user |
+
+Copy templates to get started:
+
+```bash
+cp templates/*.md workspace/
+```
+
+Edit these files to customize your bot's personality and behavior.
 
 ## Multi-User Sessions
 

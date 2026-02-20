@@ -213,14 +213,15 @@ workspace/
 - Memory tools read/write to the user's own folder
 - Context is loaded per-user: shared files + user's files
 
-## First-Time User Onboarding
+## First-Time Bot Setup
 
-When a new user starts chatting, ClawLite will:
-1. Greet and introduce itself
-2. Ask for the user's name and preferences
-3. Save the info to their personal `USER.md`
+On first conversation (when `SOUL.md` contains `_UNCONFIGURED_`), the bot will:
+1. Ask what to call itself (bot name)
+2. Ask about its role (personal assistant, work helper, etc.)
+3. Ask about preferred tone (casual, professional, etc.)
+4. Save the configuration to `SOUL.md`
 
-This creates a more personalized experience from the first conversation.
+After setup, users can still modify `SOUL.md` anytime by asking the bot or using the `write_file` tool.
 
 ## Telegram Commands
 

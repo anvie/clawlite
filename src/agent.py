@@ -8,13 +8,13 @@ from typing import Optional, Callable, Awaitable
 from .llm import stream_generate
 from .tools import get_tool, format_tools_for_prompt
 from .translation import translate_to_english, translate_to_indonesian, TRANSLATION_ENABLED
-from .context import load_full_context, ensure_user_dir, is_new_user
+from .context import load_full_context, ensure_user_dir, is_bot_unconfigured
 
 # Load system prompt
 PROMPTS_DIR = os.path.join(os.path.dirname(__file__), "..", "prompts")
 
-def load_system_prompt(user_id: Optional[int] = None) -> str:
-    """Load system prompt from file, with onboarding for new users."""
+def load_system_prompt() -> str:
+    """Load system prompt from file, with onboarding if bot unconfigured."""
     prompt_file = os.path.join(PROMPTS_DIR, "system.md")
     try:
         with open(prompt_file, "r") as f:
@@ -22,8 +22,8 @@ def load_system_prompt(user_id: Optional[int] = None) -> str:
     except FileNotFoundError:
         prompt = get_default_system_prompt()
     
-    # Add onboarding instructions for new users
-    if user_id and is_new_user(user_id):
+    # Add onboarding instructions if bot not configured yet
+    if is_bot_unconfigured():
         onboarding_file = os.path.join(PROMPTS_DIR, "onboarding.md")
         try:
             with open(onboarding_file, "r") as f:
@@ -84,8 +84,8 @@ async def run_agent(
     Returns:
         (final_response, updated_history)
     """
-    # Load system prompt (with onboarding for new users)
-    system_prompt = load_system_prompt(user_id)
+    # Load system prompt (with onboarding if bot unconfigured)
+    system_prompt = load_system_prompt()
     
     # Load user-specific context if user_id provided
     if user_id:

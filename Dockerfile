@@ -1,4 +1,4 @@
-# PyClaw Agentic AI - Lightweight Python Container
+# ClawLite - Lightweight Agentic AI Container
 FROM python:3.11-slim
 
 # Install system dependencies
@@ -10,7 +10,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user
-RUN groupadd -r pyclaw && useradd -r -g pyclaw -d /app -s /sbin/nologin pyclaw
+RUN groupadd -r clawlite && useradd -r -g clawlite -d /app -s /sbin/nologin clawlite
 
 WORKDIR /app
 
@@ -23,16 +23,20 @@ COPY src/ ./src/
 COPY prompts/ ./prompts/
 COPY config/ ./config/
 
+# Create data directories
+RUN mkdir -p /data/whatsapp && chown -R clawlite:clawlite /data
+
 # Set ownership
-RUN chown -R pyclaw:pyclaw /app
+RUN chown -R clawlite:clawlite /app
 
 # Switch to non-root user
-USER pyclaw
+USER clawlite
 
-# Workspace will be mounted at runtime
-VOLUME ["/workspace"]
+# Volumes
+VOLUME ["/workspace", "/data/whatsapp"]
 
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
 
-CMD ["python", "-m", "src.bot"]
+# Use main.py for multi-channel support
+CMD ["python", "-m", "src.main"]

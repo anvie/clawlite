@@ -26,6 +26,8 @@ services:
       - /tmp/clawlite:/tmp:rw
       - ./src:/app/src:ro
       - ./prompts:/app/prompts:ro
+      # WhatsApp session persistence
+      - ./data/whatsapp:/data/whatsapp:rw
     
     # Tmpfs for writable areas
     tmpfs:

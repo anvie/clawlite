@@ -8,22 +8,29 @@ import base64
 import asyncio
 import logging
 from datetime import datetime
-from typing import Optional, Callable
+from typing import Optional, Callable, Any, TYPE_CHECKING
 from pathlib import Path
 
+NEONIZE_AVAILABLE = False
+NewAClient = None
+MessageEv = None
+ConnectedEv = None
+DisconnectedEv = None
+build_jid = None
+
 try:
-    from neonize.aioze.client import NewAClient
-    from neonize.aioze.events import MessageEv, ConnectedEv, DisconnectedEv
-    from neonize.utils import build_jid
-    from neonize.proto.waE2E.WAWebProtobufsE2E_pb2 import (
-        Message as WAMessage,
-        ExtendedTextMessage,
-        ImageMessage,
-        DocumentMessage,
-    )
+    from neonize.aioze.client import NewAClient as _NewAClient
+    from neonize.aioze.events import MessageEv as _MessageEv, ConnectedEv as _ConnectedEv, DisconnectedEv as _DisconnectedEv
+    from neonize.utils import build_jid as _build_jid
+    
+    NewAClient = _NewAClient
+    MessageEv = _MessageEv
+    ConnectedEv = _ConnectedEv
+    DisconnectedEv = _DisconnectedEv
+    build_jid = _build_jid
     NEONIZE_AVAILABLE = True
 except ImportError:
-    NEONIZE_AVAILABLE = False
+    pass
 
 from .base import BaseChannel, WORKSPACE
 
@@ -123,7 +130,7 @@ class WhatsAppChannel(BaseChannel):
         phone = user_id.lstrip("+").replace("-", "").replace(" ", "")
         return build_jid(phone)
     
-    def _extract_sender_id(self, event: MessageEv) -> str:
+    def _extract_sender_id(self, event: Any) -> str:
         """Extract sender ID from message event."""
         try:
             if hasattr(event, 'Info') and hasattr(event.Info, 'MessageSource'):
@@ -139,7 +146,7 @@ class WhatsAppChannel(BaseChannel):
             pass
         return "unknown"
     
-    def _extract_chat_id(self, event: MessageEv) -> str:
+    def _extract_chat_id(self, event: Any) -> str:
         """Extract chat ID from message event."""
         try:
             if hasattr(event, 'Info') and hasattr(event.Info, 'MessageSource'):
@@ -155,7 +162,7 @@ class WhatsAppChannel(BaseChannel):
             pass
         return "unknown"
     
-    def _extract_text(self, event: MessageEv) -> Optional[str]:
+    def _extract_text(self, event: Any) -> Optional[str]:
         """Extract text content from message event."""
         try:
             msg = event.Message if hasattr(event, 'Message') else event.message
@@ -185,7 +192,7 @@ class WhatsAppChannel(BaseChannel):
         
         return None
     
-    async def _download_media(self, event: MessageEv, user_id: str) -> Optional[tuple[str, bytes]]:
+    async def _download_media(self, event: Any, user_id: str) -> Optional[tuple[str, bytes]]:
         """Download media from message, return (relative_path, data)."""
         try:
             msg = event.Message if hasattr(event, 'Message') else event.message
@@ -230,7 +237,7 @@ class WhatsAppChannel(BaseChannel):
         
         return None
     
-    async def _handle_message_event(self, event: MessageEv) -> None:
+    async def _handle_message_event(self, event: Any) -> None:
         """Handle incoming WhatsApp message."""
         try:
             sender_id = self._extract_sender_id(event)

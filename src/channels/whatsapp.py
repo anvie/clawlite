@@ -23,7 +23,7 @@ event = None
 build_jid = None
 
 try:
-    from neonize.client import NewClient as _NewClient
+    from neonize.client import NewClient as _NewClient, ChatPresence, ChatPresenceMedia
     from neonize.events import MessageEv as _MessageEv, ConnectedEv as _ConnectedEv, QREv as _QREv, event as _event
     from neonize.utils import build_jid as _build_jid
     
@@ -35,7 +35,8 @@ try:
     build_jid = _build_jid
     NEONIZE_AVAILABLE = True
 except ImportError:
-    pass
+    ChatPresence = None
+    ChatPresenceMedia = None
 
 from .base import BaseChannel, WORKSPACE
 
@@ -178,6 +179,23 @@ class WhatsAppChannel(BaseChannel):
             self.logger.error(f"Failed to send message to {user_id}: {e}")
             return False
     
+    async def send_typing(self, user_id: str, typing: bool = True) -> bool:
+        """Send typing indicator (composing/paused)."""
+        if not self.client or not self.connected:
+            return False
+        
+        try:
+            jid = self._parse_jid(user_id)
+            state = ChatPresence.CHAT_PRESENCE_COMPOSING if typing else ChatPresence.CHAT_PRESENCE_PAUSED
+            await asyncio.get_event_loop().run_in_executor(
+                None,
+                lambda: self.client.send_chat_presence(jid, state, ChatPresenceMedia.CHAT_PRESENCE_MEDIA_TEXT)
+            )
+            return True
+        except Exception as e:
+            self.logger.debug(f"Failed to send typing indicator: {e}")
+            return False
+    
     def _parse_jid(self, user_id: str) -> str:
         """Parse user ID to WhatsApp JID format."""
         if "@" in user_id:
@@ -253,8 +271,8 @@ class WhatsAppChannel(BaseChannel):
             if user_id not in self.conversations:
                 self.conversations[user_id] = []
             
-            # Send thinking status
-            await self.send_message(user_id, "🧠 _Thinking..._")
+            # Show typing indicator
+            await self.send_typing(user_id, True)
             
             try:
                 from ..agent import run_agent
@@ -280,12 +298,16 @@ class WhatsAppChannel(BaseChannel):
                 )
                 final_text = final_text.strip()
                 
+                # Stop typing indicator
+                await self.send_typing(user_id, False)
+                
                 if final_text:
                     await self._send_long_message(user_id, final_text)
                 else:
                     await self.send_message(user_id, "✅ Done!")
                     
             except Exception as e:
+                await self.send_typing(user_id, False)
                 self.logger.error(f"Agent error: {e}")
                 await self.send_message(user_id, f"❌ Error: {str(e)[:500]}")
                 

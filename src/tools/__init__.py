@@ -7,6 +7,7 @@ from .shell import ExecTool, RunBashTool, RunPythonTool, KillProcessTool, ListPr
 from .search import GrepTool, FindFilesTool
 from .cron import ListCronTool, AddCronTool, RemoveCronTool
 from .memory import MemoryLogTool, MemoryReadTool, MemoryUpdateTool, UserUpdateTool
+from .skill_tools import load_skill_tools
 
 # Registry of all available tools (non-user-scoped)
 TOOLS = {
@@ -24,6 +25,19 @@ TOOLS = {
     "add_cron": AddCronTool(),
     "remove_cron": RemoveCronTool(),
 }
+
+# Load and register skill-based tools
+import logging
+_logger = logging.getLogger("clawlite.tools")
+
+try:
+    SKILL_TOOLS = load_skill_tools()
+    TOOLS.update(SKILL_TOOLS)
+    if SKILL_TOOLS:
+        _logger.info(f"Registered {len(SKILL_TOOLS)} skill tool(s): {list(SKILL_TOOLS.keys())}")
+except Exception as e:
+    _logger.error(f"Failed to load skill tools: {e}")
+    SKILL_TOOLS = {}
 
 # User-scoped memory tools (instantiated per-user)
 _user_tools_cache: dict[int, dict[str, Tool]] = {}

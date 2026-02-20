@@ -6,12 +6,30 @@ import os
 from typing import Optional, Callable, Awaitable
 
 from .llm import stream_generate
-from .tools import get_tool, format_tools_for_prompt
+from .tools import get_tool, format_tools_for_prompt, SKILL_TOOLS
 from .translation import translate_to_english, translate_to_indonesian, TRANSLATION_ENABLED
 from .context import load_full_context, ensure_user_dir, is_bot_unconfigured
 
 # Load system prompt
 PROMPTS_DIR = os.path.join(os.path.dirname(__file__), "..", "prompts")
+
+
+def format_skill_prompts() -> str:
+    """Format skill prompts for inclusion in system prompt."""
+    if not SKILL_TOOLS:
+        return ""
+    
+    lines = ["\n## Available Skills\n"]
+    for tool_name, tool in SKILL_TOOLS.items():
+        skill_data = tool.skill_data
+        prompt = skill_data.get('prompt', '').strip()
+        if prompt:
+            lines.append(f"### {tool_name}")
+            lines.append(prompt)
+            lines.append("")
+    
+    return "\n".join(lines) if len(lines) > 1 else ""
+
 
 def load_system_prompt() -> str:
     """Load system prompt from file, with onboarding if bot unconfigured."""
@@ -21,6 +39,11 @@ def load_system_prompt() -> str:
             prompt = f.read()
     except FileNotFoundError:
         prompt = get_default_system_prompt()
+    
+    # Add skill prompts if any skills loaded
+    skill_prompts = format_skill_prompts()
+    if skill_prompts:
+        prompt += "\n" + skill_prompts
     
     # Add onboarding instructions if bot not configured yet
     if is_bot_unconfigured():
@@ -36,10 +59,12 @@ def load_system_prompt() -> str:
 
 def get_default_system_prompt() -> str:
     """Default system prompt if file not found."""
+    skill_section = format_skill_prompts()
     return f"""You are ClawLite, an agentic AI assistant running in a sandboxed Docker container.
 You can use tools to interact with the workspace filesystem and execute commands.
 
 {format_tools_for_prompt()}
+{skill_section}
 
 ## Tool Calling Format
 

@@ -23,6 +23,7 @@ services:
     # Volumes
     volumes:
       - ./workspace:/workspace:rw
+      - ./skills:/app/skills:ro
       - /tmp/clawlite:/tmp:rw
       - ./src:/app/src:ro
       - ./prompts:/app/prompts:ro

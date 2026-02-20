@@ -21,17 +21,40 @@ def ensure_user_dir(user_id: int) -> Path:
     # Create directories
     memory_dir.mkdir(parents=True, exist_ok=True)
     
-    # Create default USER.md if not exists
+    # Create default USER.md if not exists (marked as new user)
     user_file = user_dir / "USER.md"
     if not user_file.exists():
-        user_file.write_text(f"# User {user_id}\n\n*(Info tentang user ini akan diisi seiring waktu)*\n")
+        user_file.write_text(f"# User {user_id}\n\n_NEW_USER_\n")
     
     # Create empty MEMORY.md if not exists
     memory_file = user_dir / "MEMORY.md"
     if not memory_file.exists():
-        memory_file.write_text("# Long-term Memory\n\n*(Catatan penting yang perlu diingat)*\n")
+        memory_file.write_text("# Long-term Memory\n\n")
     
     return user_dir
+
+
+def is_new_user(user_id: int) -> bool:
+    """Check if user needs onboarding (first conversation)."""
+    user_dir = get_user_dir(user_id)
+    user_file = user_dir / "USER.md"
+    
+    if not user_file.exists():
+        return True
+    
+    content = user_file.read_text()
+    return "_NEW_USER_" in content
+
+
+def complete_onboarding(user_id: int, user_info: str) -> bool:
+    """Mark user as onboarded by updating USER.md."""
+    try:
+        user_dir = ensure_user_dir(user_id)
+        user_file = user_dir / "USER.md"
+        user_file.write_text(user_info)
+        return True
+    except Exception:
+        return False
 
 
 def read_file_safe(path: Path) -> Optional[str]:

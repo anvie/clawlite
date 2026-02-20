@@ -25,12 +25,18 @@ A lightweight agentic AI assistant with multi-channel support. Connect via Teleg
 ```bash
 git clone https://github.com/anvie/clawlite.git
 cd clawlite
-cp .env.example .env
-# Edit .env with your configuration
 
-# Copy workspace templates (optional but recommended)
-cp templates/*.md workspace/
+# Run setup script (creates .env, copies templates)
+./setup.sh
+
+# Edit .env with your configuration
+nano .env
 ```
+
+The setup script will:
+- Create `.env` from `.env.example`
+- Copy templates to `workspace/`
+- Create necessary directories
 
 ### Run with Docker (recommended)
 
@@ -206,6 +212,15 @@ workspace/
 - User folders are auto-created on first message
 - Memory tools read/write to the user's own folder
 - Context is loaded per-user: shared files + user's files
+
+## First-Time User Onboarding
+
+When a new user starts chatting, ClawLite will:
+1. Greet and introduce itself
+2. Ask for the user's name and preferences
+3. Save the info to their personal `USER.md`
+
+This creates a more personalized experience from the first conversation.
 
 ## Telegram Commands
 

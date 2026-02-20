@@ -19,10 +19,15 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy source code
+# Copy source code and templates
 COPY src/ ./src/
 COPY prompts/ ./prompts/
 COPY config/ ./config/
+COPY templates/ ./templates/
+
+# Copy entrypoint script
+COPY docker-entrypoint.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 # Create data directories
 RUN mkdir -p /data/whatsapp && chown -R clawlite:clawlite /data
@@ -39,5 +44,5 @@ VOLUME ["/workspace", "/data/whatsapp"]
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
 
-# Use main.py for multi-channel support
-CMD ["python", "-m", "src.main"]
+# Use entrypoint for auto-bootstrap
+ENTRYPOINT ["docker-entrypoint.sh"]

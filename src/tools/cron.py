@@ -107,6 +107,14 @@ class AddCronTool(Tool):
             if "no crontab" in stderr.decode().lower():
                 current = ""
             
+            # Ensure PATH is set at the top of crontab
+            path_line = "PATH=/usr/local/bin:/usr/bin:/bin"
+            if path_line not in current:
+                if current:
+                    current = path_line + "\n" + current
+                else:
+                    current = path_line + "\n"
+            
             # Build new entry
             if comment:
                 new_entry = f"# {comment}\n{schedule} {command}"

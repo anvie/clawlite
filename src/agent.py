@@ -3,6 +3,9 @@
 import json
 import re
 import os
+import time
+import asyncio
+import logging
 from typing import Optional, Callable, Awaitable
 
 from .llm import stream_generate
@@ -10,8 +13,16 @@ from .tools import get_tool, format_tools_for_prompt, SKILL_TOOLS
 from .translation import translate_to_english, translate_to_indonesian, TRANSLATION_ENABLED
 from .context import load_full_context, ensure_user_dir, is_bot_unconfigured
 
+logger = logging.getLogger("clawlite.agent")
+
 # Load system prompt
 PROMPTS_DIR = os.path.join(os.path.dirname(__file__), "..", "prompts")
+
+# Configuration
+TOOL_TIMEOUT = 30  # seconds per tool execution
+LLM_MAX_RETRIES = 3  # retry attempts for LLM errors
+LLM_RETRY_DELAY = 2  # base delay for exponential backoff
+TOTAL_TIME_LIMIT = 300  # 5 minutes max per conversation turn
 
 
 def format_skill_prompts() -> str:
@@ -87,6 +98,51 @@ Be helpful, concise, and careful with file operations.
 """
 
 
+async def execute_tool_with_timeout(tool, args: dict, timeout: int = TOOL_TIMEOUT):
+    """Execute a tool with timeout protection."""
+    try:
+        return await asyncio.wait_for(tool.execute(**args), timeout=timeout)
+    except asyncio.TimeoutError:
+        logger.warning(f"Tool {tool.name} timed out after {timeout}s")
+        from .tools.base import ToolResult
+        return ToolResult(False, "", f"Tool execution timed out after {timeout} seconds")
+    except Exception as e:
+        logger.exception(f"Tool {tool.name} raised exception")
+        from .tools.base import ToolResult
+        return ToolResult(False, "", f"Tool error: {str(e)}")
+
+
+async def stream_with_retry(prompt: str, images: list = None, max_retries: int = LLM_MAX_RETRIES):
+    """Stream LLM response with retry logic for transient errors."""
+    last_error = None
+    
+    for attempt in range(max_retries):
+        try:
+            async for token, is_thinking, thinking_content in stream_generate(prompt, images=images):
+                yield token, is_thinking, thinking_content
+            return  # Success, exit
+        except Exception as e:
+            last_error = e
+            error_name = type(e).__name__
+            
+            # Check if it's a retryable error
+            retryable = any(x in error_name.lower() or x in str(e).lower() for x in [
+                'timeout', 'connection', 'network', 'temporary', '503', '502', '429'
+            ])
+            
+            if retryable and attempt < max_retries - 1:
+                delay = LLM_RETRY_DELAY * (2 ** attempt)
+                logger.warning(f"LLM request failed ({error_name}), retrying in {delay}s (attempt {attempt + 1}/{max_retries})")
+                await asyncio.sleep(delay)
+            else:
+                logger.error(f"LLM request failed permanently: {e}")
+                raise
+    
+    # Should not reach here, but just in case
+    if last_error:
+        raise last_error
+
+
 async def run_agent(
     user_message: str,
     history: list[dict],
@@ -109,6 +165,9 @@ async def run_agent(
     Returns:
         (final_response, updated_history)
     """
+    start_time = time.time()
+    logger.info(f"Agent run started for user {user_id}, message length: {len(user_message)}")
+    
     # Load system prompt (with onboarding if bot unconfigured)
     system_prompt = load_system_prompt()
     
@@ -122,7 +181,10 @@ async def run_agent(
     # Translate user message if translation is enabled
     processed_message = user_message
     if TRANSLATION_ENABLED:
-        processed_message = await translate_to_english(user_message)
+        try:
+            processed_message = await translate_to_english(user_message)
+        except Exception as e:
+            logger.warning(f"Translation failed, using original message: {e}")
     
     # Build conversation
     conversation = ""
@@ -143,35 +205,58 @@ async def run_agent(
     while iterations < max_iterations:
         iterations += 1
         
-        # Stream LLM response
+        # Check total time limit
+        elapsed = time.time() - start_time
+        if elapsed > TOTAL_TIME_LIMIT:
+            logger.warning(f"Agent exceeded time limit ({TOTAL_TIME_LIMIT}s), aborting")
+            if accumulated_response:
+                accumulated_response += "\n\n[Response truncated: time limit exceeded]"
+            else:
+                accumulated_response = "I'm sorry, the request took too long to process. Please try a simpler query."
+            break
+        
+        logger.debug(f"Agent iteration {iterations}/{max_iterations}")
+        
+        # Stream LLM response with retry
         current_response = ""
         current_thinking = ""
         last_update = 0
         
-        import asyncio
-        
-        # Only pass images on first iteration
-        current_images = images if iterations == 1 else None
-        
-        async for token, is_thinking, thinking_content in stream_generate(full_prompt, images=current_images):
-            current_response += token
+        try:
+            # Only pass images on first iteration
+            current_images = images if iterations == 1 else None
             
-            if thinking_content:
-                current_thinking = thinking_content
-            
-            # Status updates
-            current_time = asyncio.get_event_loop().time()
-            if status_callback and (current_time - last_update > 1.0):
-                if is_thinking and thinking_content:
-                    preview = thinking_content[-400:] if len(thinking_content) > 400 else thinking_content
-                    await status_callback(f"🧠 _Thinking..._\n```\n{preview}▌\n```")
-                    thinking_shown = True
-                elif not is_thinking and current_response:
-                    # Show response progress
-                    clean = current_response.split("</think>")[-1].strip() if "</think>" in current_response else current_response.strip()
-                    if clean:
-                        await status_callback(f"{clean[:1500]}▌")
-                last_update = current_time
+            async for token, is_thinking, thinking_content in stream_with_retry(full_prompt, images=current_images):
+                current_response += token
+                
+                if thinking_content:
+                    current_thinking = thinking_content
+                
+                # Status updates
+                current_time = asyncio.get_event_loop().time()
+                if status_callback and (current_time - last_update > 1.0):
+                    try:
+                        if is_thinking and thinking_content:
+                            preview = thinking_content[-400:] if len(thinking_content) > 400 else thinking_content
+                            await status_callback(f"🧠 _Thinking..._\n```\n{preview}▌\n```")
+                            thinking_shown = True
+                        elif not is_thinking and current_response:
+                            # Show response progress
+                            clean = current_response.split("</think>")[-1].strip() if "</think>" in current_response else current_response.strip()
+                            if clean:
+                                await status_callback(f"{clean[:1500]}▌")
+                    except Exception as e:
+                        logger.warning(f"Status callback failed: {e}")
+                    last_update = current_time
+                    
+        except Exception as e:
+            logger.error(f"LLM streaming failed after retries: {e}")
+            error_msg = f"I encountered an error communicating with the AI model: {str(e)}"
+            if accumulated_response:
+                accumulated_response += f"\n\n[Error: {error_msg}]"
+            else:
+                accumulated_response = error_msg
+            break
         
         # Extract response after thinking
         if "</think>" in current_response:
@@ -193,40 +278,51 @@ async def run_agent(
         
         if tool_call_match:
             try:
-                tool_data = json.loads(tool_call_match.group(1))
+                tool_json = tool_call_match.group(1)
+                tool_data = json.loads(tool_json)
+                
                 # Support multiple field names
                 tool_name = tool_data.get("tool") or tool_data.get("name", "")
                 tool_args = tool_data.get("args") or tool_data.get("arguments", {})
                 
+                logger.info(f"Executing tool: {tool_name} with args: {list(tool_args.keys())}")
+                
                 if status_callback:
-                    await status_callback(f"🔧 Calling: `{tool_name}`\n```json\n{json.dumps(tool_args, indent=2)}\n```")
+                    try:
+                        await status_callback(f"🔧 Calling: `{tool_name}`\n```json\n{json.dumps(tool_args, indent=2)}\n```")
+                    except Exception as e:
+                        logger.warning(f"Status callback failed: {e}")
                 
                 tool = get_tool(tool_name, user_id=user_id)
                 if tool:
-                    result = await tool.execute(**tool_args)
+                    result = await execute_tool_with_timeout(tool, tool_args)
                     
                     # Format result for context (internal only, not shown to user)
                     if result.success:
                         result_text = f"{result.output[:2000]}"
+                        logger.info(f"Tool {tool_name} succeeded, output length: {len(result.output)}")
                     else:
                         result_text = f"Error: {result.error}"
+                        logger.warning(f"Tool {tool_name} failed: {result.error}")
                     
                     # Track last tool result for fallback
                     last_tool_result = {"tool": tool_name, "result": result_text, "success": result.success}
                     
                     # Add to prompt for next iteration (LLM will interpret this)
                     full_prompt += f"{response_part}\n\n<tool_result>\n{result_text}\n</tool_result>\n\nassistant\n"
-                    # Don't add raw result to user response - let LLM interpret it
                     
                 else:
                     error_text = f"Unknown tool: {tool_name}"
+                    logger.warning(error_text)
                     full_prompt += f"{response_part}\n\n<tool_result>\n{error_text}\n</tool_result>\n\nassistant\n"
                 
             except json.JSONDecodeError as e:
                 error_text = f"Invalid tool call JSON: {e}"
+                logger.warning(f"Failed to parse tool call: {tool_json[:200]}")
                 full_prompt += f"{response_part}\n\n<tool_result>\n{error_text}\n</tool_result>\n\nassistant\n"
         else:
             # No tool call, we're done
+            logger.debug("No tool call found, finishing agent loop")
             break
     
     # Translate response back to Indonesian if translation is enabled
@@ -235,13 +331,17 @@ async def run_agent(
     # Fallback: if response is empty or only tool calls, include last tool result
     clean_response = re.sub(r'<tool_?call>.*?</tool_?call>', '', final_response, flags=re.DOTALL | re.IGNORECASE).strip()
     if not clean_response and last_tool_result:
+        logger.info("Response was empty, falling back to last tool result")
         if last_tool_result["success"]:
             final_response = f"Result:\n```\n{last_tool_result['result']}\n```"
         else:
             final_response = f"Error: {last_tool_result['result']}"
     
     if TRANSLATION_ENABLED:
-        final_response = await translate_to_indonesian(final_response)
+        try:
+            final_response = await translate_to_indonesian(final_response)
+        except Exception as e:
+            logger.warning(f"Response translation failed: {e}")
     
     # Update history (store original messages, not translated)
     new_history = history + [
@@ -252,5 +352,8 @@ async def run_agent(
     # Keep history bounded
     if len(new_history) > 20:
         new_history = new_history[-20:]
+    
+    elapsed = time.time() - start_time
+    logger.info(f"Agent run completed in {elapsed:.2f}s, iterations: {iterations}, response length: {len(final_response)}")
     
     return final_response, new_history

@@ -12,7 +12,7 @@ def main():
         print("Usage: clawlite <command> [args...]")
         print()
         print("Commands:")
-        print("  skill    Manage skills (list, install, remove, info)")
+        print("  skill    Manage skills (new, list, install, remove, info)")
         print("  run      Start the bot (same as python -m src.main)")
         sys.exit(1)
     

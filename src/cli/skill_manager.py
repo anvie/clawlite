@@ -6,10 +6,95 @@ import json
 import shutil
 import subprocess
 import argparse
+import re
 from pathlib import Path
 
 # Default skills directory (can be overridden via env)
 SKILLS_DIR = Path(os.getenv("SKILLS_DIR", "./skills"))
+
+# ============================================================================
+# Scaffold Templates
+# ============================================================================
+
+TEMPLATE_MAIN_PY = '''"""
+{name} skill for ClawLite.
+
+This is the main entry point. The execute() function is called
+when the LLM invokes this skill's tool.
+"""
+
+
+def execute(args: dict) -> str:
+    """
+    Execute the {name} skill.
+    
+    Args:
+        args: Dictionary of arguments as defined in schema.json
+        
+    Returns:
+        String result to show to user
+    """
+    # TODO: Implement your skill logic here
+    example_param = args.get("example_param", "default")
+    
+    return f"{name} executed with: {{example_param}}"
+'''
+
+TEMPLATE_SCHEMA_JSON = '''{{
+  "tool": "{tool_name}",
+  "description": "{description}",
+  "args": {{
+    "example_param": "string"
+  }}
+}}
+'''
+
+TEMPLATE_PROMPT_MD = '''# {title} Skill
+
+{description}
+
+## Usage
+Use the `{tool_name}` tool when you need to {description_lower}.
+
+## Examples
+- "Please {description_lower}"
+'''
+
+TEMPLATE_README_MD = '''# {title} Skill
+
+{description}
+
+## Installation
+
+This skill is part of ClawLite. Place in `skills/{name}/` directory.
+
+## Schema
+
+| Argument | Type | Description |
+|----------|------|-------------|
+| example_param | string | Example parameter |
+
+## Development
+
+Edit `main.py` to implement your skill logic.
+The `execute(args)` function receives arguments as defined in `schema.json`.
+'''
+
+
+def slugify(name: str) -> str:
+    """Convert name to valid skill slug (lowercase, underscores)."""
+    # Replace spaces and hyphens with underscores
+    slug = re.sub(r'[\s\-]+', '_', name.lower())
+    # Remove invalid characters
+    slug = re.sub(r'[^a-z0-9_]', '', slug)
+    # Remove leading/trailing underscores
+    slug = slug.strip('_')
+    return slug
+
+
+def title_case(name: str) -> str:
+    """Convert slug to Title Case."""
+    return ' '.join(word.capitalize() for word in name.replace('_', ' ').split())
 
 
 def get_skills_dir() -> Path:
@@ -266,6 +351,78 @@ def show_skill_info(name: str) -> None:
             print(f"  - {item.name}")
 
 
+def create_skill(name: str, description: str = None) -> bool:
+    """
+    Create a new skill with scaffold files.
+    
+    Args:
+        name: Skill name (will be slugified)
+        description: Optional description
+    
+    Returns:
+        True if successful
+    """
+    skills_dir = get_skills_dir()
+    
+    # Normalize name
+    skill_slug = slugify(name)
+    if not skill_slug:
+        print(f"Error: Invalid skill name '{name}'")
+        return False
+    
+    skill_path = skills_dir / skill_slug
+    
+    if skill_path.exists():
+        print(f"Error: Skill '{skill_slug}' already exists at {skill_path}")
+        return False
+    
+    # Prepare template variables
+    title = title_case(skill_slug)
+    tool_name = f"{skill_slug}_tool"
+    desc = description or f"A skill for {title.lower()}"
+    desc_lower = desc.lower().rstrip('.')
+    
+    # Create directory
+    skill_path.mkdir(parents=True, exist_ok=True)
+    
+    # Create files
+    files = {
+        "main.py": TEMPLATE_MAIN_PY.format(name=title),
+        "schema.json": TEMPLATE_SCHEMA_JSON.format(
+            tool_name=tool_name,
+            description=desc
+        ),
+        "prompt.md": TEMPLATE_PROMPT_MD.format(
+            title=title,
+            tool_name=tool_name,
+            description=desc,
+            description_lower=desc_lower
+        ),
+        "README.md": TEMPLATE_README_MD.format(
+            title=title,
+            name=skill_slug,
+            description=desc
+        )
+    }
+    
+    for filename, content in files.items():
+        file_path = skill_path / filename
+        file_path.write_text(content.strip() + "\n")
+    
+    print(f"✓ Created skill '{skill_slug}' at {skill_path}")
+    print()
+    print("Files created:")
+    for filename in files:
+        print(f"  - {filename}")
+    print()
+    print("Next steps:")
+    print(f"  1. Edit {skill_path}/main.py to implement your logic")
+    print(f"  2. Update {skill_path}/schema.json with your parameters")
+    print(f"  3. Restart the bot to load the skill")
+    
+    return True
+
+
 def main():
     """Main CLI entry point."""
     parser = argparse.ArgumentParser(
@@ -292,6 +449,11 @@ def main():
     info_parser = subparsers.add_parser("info", help="Show skill info")
     info_parser.add_argument("name", help="Skill name")
     
+    # new
+    new_parser = subparsers.add_parser("new", help="Create a new skill")
+    new_parser.add_argument("name", help="Skill name")
+    new_parser.add_argument("--description", "-d", help="Skill description")
+    
     args = parser.parse_args()
     
     if args.command == "list":
@@ -304,6 +466,9 @@ def main():
         sys.exit(0 if success else 1)
     elif args.command == "info":
         show_skill_info(args.name)
+    elif args.command == "new":
+        success = create_skill(args.name, args.description)
+        sys.exit(0 if success else 1)
     else:
         parser.print_help()
 

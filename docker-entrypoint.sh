@@ -54,6 +54,11 @@ fi
 # Ensure workspace ownership
 chown -R "$RUN_USER:$RUN_USER" "$WORKSPACE" 2>/dev/null || true
 
+# Ensure owner file is writable by app (for first-user-as-admin)
+if [ -f "/app/.owner" ]; then
+    chown "$RUN_USER:$RUN_USER" /app/.owner 2>/dev/null || true
+fi
+
 # Run the main application as non-root user
 if [ "$(id -u)" = "0" ]; then
     echo "🚀 Starting ClawLite as $RUN_USER..."

@@ -34,6 +34,7 @@ services:
       - ./workspace:/workspace:rw
       - ./config.yaml:/app/config.yaml:ro
       - ./skills:/app/skills:ro
+      - ./owner:/app/.owner:rw
     
     tmpfs:
       - /tmp:size=100m,mode=1777

@@ -192,8 +192,14 @@ async def run_agent(
     if user_id:
         ensure_user_dir(user_id)
         user_context = load_full_context(user_id)
+        
+        # Add runtime context with user_id for cron/reminder commands
+        runtime_context = f"## Runtime Info\n- Current user ID: `{user_id}`\n- Use this ID for `clawlite-send` commands in cron jobs\n"
+        
         if user_context:
-            system_prompt += f"\n\n# Context\n\n{user_context}"
+            system_prompt += f"\n\n# Context\n\n{runtime_context}\n{user_context}"
+        else:
+            system_prompt += f"\n\n# Context\n\n{runtime_context}"
     
     # Translate user message if translation is enabled
     processed_message = user_message

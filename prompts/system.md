@@ -106,11 +106,15 @@ List current cron jobs.
 #### add_cron
 Add a cron job. For reminders, use `clawlite-send` to message the user.
 ```json
-{"tool": "add_cron", "args": {"schedule": "0 9 * * *", "command": "clawlite-send USER_ID 'Your reminder message'", "comment": "daily reminder"}}
+{"tool": "add_cron", "args": {"schedule": "0 9 * * *", "command": "clawlite-send tg_123456 'Your reminder message'", "comment": "daily reminder"}}
 ```
 Schedule format: `minute hour day month weekday`
 
-**IMPORTANT for reminders:** Replace `USER_ID` with the actual user ID (e.g., `tg_123456`). The command `clawlite-send` sends the message back to the user via their channel.
+**CRITICAL for reminders:** 
+- Use the **current user ID from Runtime Info** (e.g., `tg_123456` or `wa_628xxx`)
+- The ID MUST include the channel prefix (`tg_` for Telegram, `wa_` for WhatsApp)
+- The command `clawlite-send` sends the message back to the user via their channel
+- Example: If user ID is `tg_76639539`, use: `clawlite-send tg_76639539 'message'`
 
 #### remove_cron
 Remove a cron job by pattern match.

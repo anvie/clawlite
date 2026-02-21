@@ -216,9 +216,23 @@ async def run_agent(
         datetime_str = now.strftime("%Y-%m-%d %H:%M:%S %Z")
         day_name = now.strftime("%A")
         
+        # Check admin/owner status
+        from .access import is_admin, is_owner
+        user_is_owner = is_owner(user_id)
+        user_is_admin = is_admin(user_id)
+        
+        admin_status = ""
+        if user_is_owner:
+            admin_status = "- User role: **Owner** (full admin privileges)"
+        elif user_is_admin:
+            admin_status = "- User role: **Admin** (full privileges)"
+        else:
+            admin_status = "- User role: Regular user"
+        
         runtime_context = f"""## Runtime Info
 - Current datetime: `{datetime_str}` ({day_name})
 - Current user ID: `{user_id}`
+{admin_status}
 - Use this ID for `clawlite-send` commands in cron jobs
 """
         

@@ -483,6 +483,32 @@ def stop_instance(instance_name: str) -> bool:
         return False
 
 
+def restart_instance(instance_name: str) -> bool:
+    """Restart an instance."""
+    path = get_instance_path(instance_name)
+    if not os.path.exists(path):
+        logger.error(f"Instance '{instance_name}' not found")
+        return False
+    
+    try:
+        result = subprocess.run(
+            ["docker", "compose", "restart"],
+            cwd=path,
+            capture_output=True,
+            text=True,
+            timeout=60
+        )
+        if result.returncode == 0:
+            logger.info(f"Restarted instance '{instance_name}'")
+            return True
+        else:
+            logger.error(f"Failed to restart: {result.stderr}")
+            return False
+    except Exception as e:
+        logger.error(f"Failed to restart instance: {e}")
+        return False
+
+
 def remove_instance(instance_name: str, force: bool = False) -> bool:
     """Remove an instance."""
     import shutil
@@ -506,4 +532,160 @@ def remove_instance(instance_name: str, force: bool = False) -> bool:
         return True
     except Exception as e:
         logger.error(f"Failed to remove instance: {e}")
+        return False
+
+
+# === Skill Management ===
+
+def get_instance_skills_path(instance_name: str) -> str:
+    """Get the skills directory path for an instance."""
+    return os.path.join(get_instance_path(instance_name), "skills")
+
+
+def list_instance_skills(instance_name: str) -> list[dict]:
+    """List skills installed in an instance."""
+    skills_path = get_instance_skills_path(instance_name)
+    
+    if not os.path.exists(skills_path):
+        return []
+    
+    skills = []
+    for name in os.listdir(skills_path):
+        skill_dir = os.path.join(skills_path, name)
+        if not os.path.isdir(skill_dir):
+            continue
+        
+        # Read schema.json for skill info
+        schema_file = os.path.join(skill_dir, "schema.json")
+        skill_info = {"name": name, "description": ""}
+        
+        if os.path.exists(schema_file):
+            try:
+                import json
+                with open(schema_file) as f:
+                    schema = json.load(f)
+                    skill_info["description"] = schema.get("description", "")
+                    skill_info["tool_name"] = schema.get("name", name)
+            except Exception:
+                pass
+        
+        skills.append(skill_info)
+    
+    return skills
+
+
+def install_skill(instance_name: str, source: str) -> bool:
+    """
+    Install a skill into an instance.
+    
+    Args:
+        instance_name: Target instance name
+        source: Skill source - can be:
+            - Local path (./my-skill or /absolute/path)
+            - GitHub repo (user/repo-name)
+    
+    Returns:
+        True if installed successfully
+    """
+    import shutil
+    import tempfile
+    
+    instance_path = get_instance_path(instance_name)
+    if not os.path.exists(instance_path):
+        logger.error(f"Instance '{instance_name}' not found")
+        return False
+    
+    skills_path = get_instance_skills_path(instance_name)
+    os.makedirs(skills_path, exist_ok=True)
+    
+    # Determine source type
+    if source.startswith("./") or source.startswith("/") or os.path.exists(source):
+        # Local path
+        source_path = os.path.abspath(os.path.expanduser(source))
+        if not os.path.exists(source_path):
+            logger.error(f"Source path not found: {source_path}")
+            return False
+        
+        skill_name = os.path.basename(source_path.rstrip("/"))
+        dest_path = os.path.join(skills_path, skill_name)
+        
+        if os.path.exists(dest_path):
+            logger.warning(f"Skill '{skill_name}' already exists, replacing...")
+            shutil.rmtree(dest_path)
+        
+        shutil.copytree(source_path, dest_path)
+        logger.info(f"Installed skill '{skill_name}' from local path")
+        
+    else:
+        # GitHub repo
+        repo = source
+        if "/" not in repo:
+            logger.error(f"Invalid GitHub repo format. Use: user/repo")
+            return False
+        
+        # Clone to temp dir first
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            clone_url = f"https://github.com/{repo}.git"
+            logger.info(f"Cloning {clone_url}...")
+            
+            try:
+                result = subprocess.run(
+                    ["git", "clone", "--depth", "1", clone_url, tmp_dir],
+                    capture_output=True,
+                    text=True,
+                    timeout=60
+                )
+                if result.returncode != 0:
+                    logger.error(f"Git clone failed: {result.stderr}")
+                    return False
+            except Exception as e:
+                logger.error(f"Git clone failed: {e}")
+                return False
+            
+            # Determine skill name from repo or schema
+            skill_name = repo.split("/")[-1]
+            # Remove common suffixes
+            for suffix in ["-clawlite-skill", "-skill", "-clawlite"]:
+                if skill_name.endswith(suffix):
+                    skill_name = skill_name[:-len(suffix)]
+                    break
+            
+            # Check if it's a skill directory (has schema.json or main.py)
+            if not (os.path.exists(os.path.join(tmp_dir, "schema.json")) or 
+                    os.path.exists(os.path.join(tmp_dir, "main.py"))):
+                logger.error(f"Invalid skill: missing schema.json or main.py")
+                return False
+            
+            dest_path = os.path.join(skills_path, skill_name)
+            
+            if os.path.exists(dest_path):
+                logger.warning(f"Skill '{skill_name}' already exists, replacing...")
+                shutil.rmtree(dest_path)
+            
+            # Copy without .git
+            shutil.copytree(tmp_dir, dest_path, ignore=shutil.ignore_patterns('.git'))
+            logger.info(f"Installed skill '{skill_name}' from GitHub")
+    
+    print(f"✅ Skill installed. Restart instance to load: ./clawlite instances restart {instance_name}")
+    return True
+
+
+def remove_skill(instance_name: str, skill_name: str) -> bool:
+    """Remove a skill from an instance."""
+    import shutil
+    
+    skills_path = get_instance_skills_path(instance_name)
+    skill_path = os.path.join(skills_path, skill_name)
+    
+    if not os.path.exists(skill_path):
+        logger.error(f"Skill '{skill_name}' not found in instance '{instance_name}'")
+        return False
+    
+    try:
+        shutil.rmtree(skill_path)
+        logger.info(f"Removed skill '{skill_name}' from instance '{instance_name}'")
+        print(f"✅ Skill removed. Restart instance to apply: ./clawlite instances restart {instance_name}")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to remove skill: {e}")
         return False

@@ -98,6 +98,18 @@ def cmd_instances_stop(args):
         return 1
 
 
+def cmd_instances_restart(args):
+    """Handle instances restart command."""
+    from .instances import restart_instance
+    
+    if restart_instance(args.name):
+        print(f"✅ Restarted instance '{args.name}'")
+        return 0
+    else:
+        print(f"❌ Failed to restart instance '{args.name}'")
+        return 1
+
+
 def cmd_instances_remove(args):
     """Handle instances remove command."""
     if remove_instance(args.name, force=args.force):
@@ -113,6 +125,51 @@ def cmd_instances_path(args):
     path = get_instance_path(args.name)
     print(path)
     return 0
+
+
+def cmd_instances_skill_list(args):
+    """Handle instances skill list command."""
+    from .instances import list_instance_skills, get_instance_path
+    import os
+    
+    instance_path = get_instance_path(args.instance)
+    if not os.path.exists(instance_path):
+        print(f"❌ Instance '{args.instance}' not found")
+        return 1
+    
+    skills = list_instance_skills(args.instance)
+    
+    if not skills:
+        print(f"No skills installed in '{args.instance}'")
+        return 0
+    
+    print(f"Skills in '{args.instance}':")
+    print()
+    for skill in skills:
+        tool_name = skill.get("tool_name", skill["name"])
+        desc = skill.get("description", "No description")
+        print(f"  📦 {skill['name']}")
+        print(f"     Tool: {tool_name}")
+        print(f"     {desc}")
+        print()
+    
+    return 0
+
+
+def cmd_instances_skill_install(args):
+    """Handle instances skill install command."""
+    from .instances import install_skill
+    
+    success = install_skill(args.instance, args.source)
+    return 0 if success else 1
+
+
+def cmd_instances_skill_remove(args):
+    """Handle instances skill remove command."""
+    from .instances import remove_skill
+    
+    success = remove_skill(args.instance, args.skill_name)
+    return 0 if success else 1
 
 
 def cmd_templates_list(args):

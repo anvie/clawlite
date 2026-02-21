@@ -49,11 +49,28 @@ def main():
     inst_start.add_argument("name", help="Instance name")
     inst_stop = instances_sub.add_parser("stop", help="Stop an instance")
     inst_stop.add_argument("name", help="Instance name")
+    inst_restart = instances_sub.add_parser("restart", help="Restart an instance")
+    inst_restart.add_argument("name", help="Instance name")
     inst_remove = instances_sub.add_parser("remove", help="Remove an instance")
     inst_remove.add_argument("name", help="Instance name")
     inst_remove.add_argument("--force", "-f", action="store_true", help="Force remove")
     inst_path = instances_sub.add_parser("path", help="Get instance path")
     inst_path.add_argument("name", help="Instance name")
+    
+    # Instance skill management
+    inst_skill = instances_sub.add_parser("skill", help="Manage instance skills")
+    inst_skill_sub = inst_skill.add_subparsers(dest="skill_action")
+    
+    inst_skill_list = inst_skill_sub.add_parser("list", help="List installed skills")
+    inst_skill_list.add_argument("instance", help="Instance name")
+    
+    inst_skill_install = inst_skill_sub.add_parser("install", help="Install a skill")
+    inst_skill_install.add_argument("instance", help="Instance name")
+    inst_skill_install.add_argument("source", help="Skill source (local path or github user/repo)")
+    
+    inst_skill_remove = inst_skill_sub.add_parser("remove", help="Remove a skill")
+    inst_skill_remove.add_argument("instance", help="Instance name")
+    inst_skill_remove.add_argument("skill_name", help="Skill name to remove")
     
     # === templates command ===
     templates_parser = subparsers.add_parser("templates", help="Manage templates")
@@ -89,7 +106,8 @@ def main():
     elif args.command == "instances":
         from cli.main import (
             cmd_new_instance, cmd_instances_list, cmd_instances_start,
-            cmd_instances_stop, cmd_instances_remove, cmd_instances_path
+            cmd_instances_stop, cmd_instances_restart, cmd_instances_remove, 
+            cmd_instances_path
         )
         if args.instances_cmd == "new":
             sys.exit(cmd_new_instance(args))
@@ -99,10 +117,26 @@ def main():
             sys.exit(cmd_instances_start(args))
         elif args.instances_cmd == "stop":
             sys.exit(cmd_instances_stop(args))
+        elif args.instances_cmd == "restart":
+            sys.exit(cmd_instances_restart(args))
         elif args.instances_cmd == "remove":
             sys.exit(cmd_instances_remove(args))
         elif args.instances_cmd == "path":
             sys.exit(cmd_instances_path(args))
+        elif args.instances_cmd == "skill":
+            from cli.main import (
+                cmd_instances_skill_list, cmd_instances_skill_install, 
+                cmd_instances_skill_remove
+            )
+            if args.skill_action == "list":
+                sys.exit(cmd_instances_skill_list(args))
+            elif args.skill_action == "install":
+                sys.exit(cmd_instances_skill_install(args))
+            elif args.skill_action == "remove":
+                sys.exit(cmd_instances_skill_remove(args))
+            else:
+                inst_skill.print_help()
+                sys.exit(0)
         else:
             instances_parser.print_help()
             sys.exit(0)

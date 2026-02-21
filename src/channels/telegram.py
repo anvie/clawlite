@@ -71,8 +71,10 @@ class TelegramChannel(BaseChannel):
     async def send_message(self, user_id: str, text: str, **kwargs) -> bool:
         """Send a message to a user."""
         try:
+            # Strip prefix if present (e.g., tg_123456 -> 123456)
+            raw_id = self.strip_prefix(user_id)
             await self.application.bot.send_message(
-                chat_id=int(user_id),
+                chat_id=int(raw_id),
                 text=text,
                 parse_mode=kwargs.get("parse_mode", "Markdown")
             )

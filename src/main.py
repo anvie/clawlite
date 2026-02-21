@@ -149,9 +149,69 @@ def print_startup_info():
     print("=" * 50 + "\n")
 
 
+async def send_message(user_id: str, message: str) -> bool:
+    """Send a message to a user via their channel."""
+    import httpx
+    
+    # Parse channel from user_id prefix
+    if user_id.startswith("tg_"):
+        channel = "telegram"
+        raw_id = user_id[3:]
+    elif user_id.startswith("wa_"):
+        channel = "whatsapp"
+        raw_id = user_id[3:]
+    else:
+        # Default to telegram
+        channel = "telegram"
+        raw_id = user_id
+    
+    if channel == "telegram":
+        token = os.getenv("TELEGRAM_TOKEN")
+        if not token:
+            logger.error("TELEGRAM_TOKEN not set")
+            return False
+        
+        url = f"https://api.telegram.org/bot{token}/sendMessage"
+        async with httpx.AsyncClient() as client:
+            try:
+                response = await client.post(url, json={
+                    "chat_id": raw_id,
+                    "text": message,
+                })
+                if response.status_code == 200:
+                    logger.info(f"Message sent to {user_id}")
+                    return True
+                else:
+                    logger.error(f"Telegram API error: {response.text}")
+                    return False
+            except Exception as e:
+                logger.error(f"Error sending message: {e}")
+                return False
+    else:
+        logger.error(f"Channel {channel} send not implemented yet")
+        return False
+
+
 def main():
     """Main entry point."""
-    asyncio.run(run_channels())
+    import argparse
+    
+    parser = argparse.ArgumentParser(description="ClawLite - Lightweight Agentic AI")
+    subparsers = parser.add_subparsers(dest="command")
+    
+    # Send subcommand
+    send_parser = subparsers.add_parser("send", help="Send a message to a user")
+    send_parser.add_argument("-u", "--user", required=True, help="User ID (e.g., tg_123456)")
+    send_parser.add_argument("-m", "--message", required=True, help="Message to send")
+    
+    args = parser.parse_args()
+    
+    if args.command == "send":
+        success = asyncio.run(send_message(args.user, args.message))
+        sys.exit(0 if success else 1)
+    else:
+        # Default: run channels
+        asyncio.run(run_channels())
 
 
 if __name__ == "__main__":

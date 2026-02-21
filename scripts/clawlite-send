@@ -17,6 +17,6 @@ USER_ID="$1"
 shift
 MESSAGE="$*"
 
-# Run the Python CLI
+# Use main entry point with send subcommand
 cd /app
-exec python -m src.cli.send --user "$USER_ID" --message "$MESSAGE"
+exec python -m src.main send --user "$USER_ID" --message "$MESSAGE"

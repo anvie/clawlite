@@ -664,6 +664,15 @@ def install_skill(instance_name: str, source: str) -> bool:
             
             # Copy without .git
             shutil.copytree(tmp_dir, dest_path, ignore=shutil.ignore_patterns('.git'))
+            
+            # Fix permissions (git clone creates dirs with restricted perms)
+            os.chmod(dest_path, 0o755)
+            for root, dirs, files in os.walk(dest_path):
+                for d in dirs:
+                    os.chmod(os.path.join(root, d), 0o755)
+                for f in files:
+                    os.chmod(os.path.join(root, f), 0o644)
+            
             logger.info(f"Installed skill '{skill_name}' from GitHub")
     
     print(f"✅ Skill installed. Restart instance to load: ./clawlite instances restart {instance_name}")

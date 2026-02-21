@@ -16,29 +16,25 @@ _logger = logging.getLogger("clawlite.tools")
 
 
 def _filter_tools_by_config(tools: dict) -> dict:
-    """Filter tools based on config/clawlite.yaml settings."""
+    """Filter tools based on config/clawlite.yaml settings.
+    
+    If tools.allowed is empty or missing: all tools enabled
+    If tools.allowed has items: only those tools enabled
+    """
     try:
         from ..config import get as config_get
     except ImportError:
         return tools
     
-    mode = config_get('tools.mode', 'blocklist')
+    allowed = config_get('tools.allowed', [])
     
-    if mode == 'allowlist':
-        enabled = config_get('tools.enabled', [])
-        if enabled:
-            filtered = {k: v for k, v in tools.items() if k in enabled}
-            disabled_count = len(tools) - len(filtered)
-            if disabled_count > 0:
-                _logger.info(f"Allowlist mode: {len(filtered)} tools enabled, {disabled_count} disabled")
-            return filtered
-    else:  # blocklist (default)
-        disabled = config_get('tools.disabled', [])
-        if disabled:
-            filtered = {k: v for k, v in tools.items() if k not in disabled}
-            _logger.info(f"Blocklist mode: disabled {len(disabled)} tools: {disabled}")
-            return filtered
+    if allowed:
+        filtered = {k: v for k, v in tools.items() if k in allowed}
+        disabled_count = len(tools) - len(filtered)
+        _logger.info(f"Tools: {len(filtered)} enabled, {disabled_count} disabled (allowlist mode)")
+        return filtered
     
+    # Empty or missing = all tools enabled
     return tools
 
 

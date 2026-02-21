@@ -17,23 +17,13 @@ agent:
 
 # Tool settings
 tools:
-  # Mode: "allowlist" or "blocklist"
-  # - blocklist: all tools enabled EXCEPT those in 'disabled'
-  # - allowlist: only tools in 'enabled' are available
-  mode: blocklist
-  
-  # For blocklist mode: disable specific tools
-  disabled: []
-  # disabled:
-  #   - exec
-  #   - run_bash
-  #   - run_python
-  
-  # For allowlist mode: enable only specific tools
-  # enabled:
+  # Allowed tools (empty = all tools enabled)
+  # Example: only enable specific tools
+  # allowed:
   #   - read_file
   #   - write_file
   #   - web_search
+  allowed: []
   
   # Per-tool configuration
   options:

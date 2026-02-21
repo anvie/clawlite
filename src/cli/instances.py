@@ -675,8 +675,121 @@ def install_skill(instance_name: str, source: str) -> bool:
             
             logger.info(f"Installed skill '{skill_name}' from GitHub")
     
+    # Check for required env vars in schema.json
+    schema_file = os.path.join(dest_path, "schema.json")
+    if os.path.exists(schema_file):
+        try:
+            import json
+            with open(schema_file) as f:
+                schema = json.load(f)
+            
+            env_vars = schema.get("env", {})
+            if env_vars:
+                configured = configure_skill_env(instance_name, env_vars)
+                if not configured:
+                    print(f"⚠️  Skill installed but not configured. Add required env vars to .env manually.")
+        except Exception as e:
+            logger.warning(f"Failed to read skill schema: {e}")
+    
     print(f"✅ Skill installed. Restart instance to load: ./clawlite instances restart {instance_name}")
     return True
+
+
+def configure_skill_env(instance_name: str, env_vars: dict) -> bool:
+    """
+    Prompt user for required environment variables and add to instance .env.
+    
+    Args:
+        instance_name: Instance name
+        env_vars: Dict of env var definitions from schema.json
+            {
+                "VAR_NAME": {
+                    "description": "What this var is for",
+                    "required": true/false,
+                    "secret": true/false,
+                    "default": "optional default value"
+                }
+            }
+    
+    Returns:
+        True if all required vars configured
+    """
+    import getpass
+    
+    instance_path = get_instance_path(instance_name)
+    env_file = os.path.join(instance_path, ".env")
+    
+    # Read existing env vars
+    existing_vars = {}
+    if os.path.exists(env_file):
+        with open(env_file) as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    key, _, value = line.partition("=")
+                    existing_vars[key.strip()] = value.strip()
+    
+    # Determine which vars need to be configured
+    vars_to_configure = []
+    for var_name, var_def in env_vars.items():
+        if var_name in existing_vars and existing_vars[var_name]:
+            continue  # Already configured
+        vars_to_configure.append((var_name, var_def))
+    
+    if not vars_to_configure:
+        logger.info("All required env vars already configured")
+        return True
+    
+    print(f"\n📋 Skill requires configuration:\n")
+    
+    new_vars = {}
+    for var_name, var_def in vars_to_configure:
+        description = var_def.get("description", var_name)
+        required = var_def.get("required", False)
+        secret = var_def.get("secret", False)
+        default = var_def.get("default", "")
+        
+        prompt = f"  {var_name}"
+        if description:
+            prompt += f" ({description})"
+        if default:
+            prompt += f" [{default}]"
+        if not required:
+            prompt += " (optional)"
+        prompt += ": "
+        
+        if secret:
+            value = getpass.getpass(prompt)
+        else:
+            value = input(prompt)
+        
+        if not value and default:
+            value = default
+        
+        if not value and required:
+            print(f"    ⚠️  {var_name} is required but not provided")
+            continue
+        
+        if value:
+            new_vars[var_name] = value
+    
+    # Append to .env file
+    if new_vars:
+        with open(env_file, "a") as f:
+            f.write(f"\n# Skill configuration\n")
+            for var_name, value in new_vars.items():
+                f.write(f"{var_name}={value}\n")
+        print(f"\n✅ Configuration saved to .env")
+    
+    # Check if all required vars are now configured
+    all_configured = True
+    for var_name, var_def in env_vars.items():
+        if var_def.get("required", False):
+            if var_name not in existing_vars and var_name not in new_vars:
+                all_configured = False
+                break
+    
+    return all_configured
 
 
 def remove_skill(instance_name: str, skill_name: str) -> bool:

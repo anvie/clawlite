@@ -8,6 +8,14 @@
 
 set -e
 
+# Source environment variables (for cron jobs)
+ENV_FILE="/app/.env.cron"
+if [ -f "$ENV_FILE" ]; then
+    set -a
+    source "$ENV_FILE"
+    set +a
+fi
+
 if [ $# -lt 2 ]; then
     echo "Usage: clawlite-send <user_id> <message>" >&2
     exit 1

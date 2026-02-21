@@ -24,14 +24,6 @@ if [ "$(id -u)" = "0" ]; then
     chown clawlite:crontab /var/spool/cron/crontabs/clawlite
     chmod 600 /var/spool/cron/crontabs/clawlite
     
-    # Export environment variables for cron jobs
-    # Cron runs in isolated environment, so we save env vars to a file
-    ENV_FILE="/app/.env.cron"
-    printenv | grep -E '^(TELEGRAM_|WHATSAPP_|LLM_|OLLAMA_|OPENROUTER_|WORKSPACE_|ALLOWED_)' > "$ENV_FILE" 2>/dev/null || true
-    chown "$RUN_USER:$RUN_USER" "$ENV_FILE"
-    chmod 600 "$ENV_FILE"
-    echo "✓ Exported env vars for cron"
-    
     service cron start || cron
     echo "✓ Cron daemon started"
 fi

@@ -27,10 +27,43 @@ logging.getLogger("telegram").setLevel(logging.WARNING)
 logging.getLogger("neonize").setLevel(logging.WARNING)
 
 
+# Global channel registry for API access
+_active_channels: list = []
+
+
+async def send_to_user(user_id: str, message: str) -> bool:
+    """Send a message to a user via their channel (used by API server)."""
+    # Parse channel from user_id prefix
+    if user_id.startswith("tg_"):
+        channel_name = "telegram"
+    elif user_id.startswith("wa_"):
+        channel_name = "whatsapp"
+    else:
+        channel_name = "telegram"
+    
+    # Find matching channel
+    for channel in _active_channels:
+        if channel.name == channel_name:
+            try:
+                await channel.send_message(user_id, message)
+                logger.info(f"Message sent to {user_id}")
+                return True
+            except Exception as e:
+                logger.error(f"Failed to send to {user_id}: {e}")
+                return False
+    
+    logger.error(f"No active channel for {channel_name}")
+    return False
+
+
 async def run_channels():
     """Run all enabled channels."""
+    global _active_channels
+    
     from .channels import get_enabled_channels, create_channel, get_available_channels
     from .agent import run_agent
+    from .api import APIServer
+    from .config import get as config_get
     
     enabled = get_enabled_channels()
     available = get_available_channels()
@@ -80,6 +113,13 @@ async def run_channels():
         logger.error("❌ No channels could be created!")
         return
     
+    # Store globally for API access
+    _active_channels = active_channels
+    
+    # Setup API server
+    api_port = int(os.getenv("API_PORT", config_get("api.port", 8080)))
+    api_server = APIServer(send_to_user, port=api_port)
+    
     # Setup signal handlers for graceful shutdown
     shutdown_event = asyncio.Event()
     
@@ -95,13 +135,16 @@ async def run_channels():
             # Windows doesn't support add_signal_handler
             pass
     
+    # Start API server
+    await api_server.start()
+    
     # Start all channels
     start_tasks = []
     for channel in active_channels:
         start_tasks.append(asyncio.create_task(channel.start()))
     
     # Print startup info
-    print_startup_info()
+    print_startup_info(api_port)
     
     try:
         # Wait for channels to start
@@ -119,6 +162,9 @@ async def run_channels():
     except KeyboardInterrupt:
         logger.info("🛑 Keyboard interrupt received...")
     finally:
+        # Stop API server
+        await api_server.stop()
+        
         # Stop all channels
         logger.info("🔄 Stopping channels...")
         stop_tasks = [channel.stop() for channel in active_channels]
@@ -126,7 +172,7 @@ async def run_channels():
         logger.info("✅ All channels stopped")
 
 
-def print_startup_info():
+def print_startup_info(api_port: int = 8080):
     """Print startup information."""
     llm_provider = os.getenv("LLM_PROVIDER", "ollama").lower()
     
@@ -146,6 +192,7 @@ def print_startup_info():
         print(f"   Host: {ollama_host}")
     
     print(f"   Workspace: {os.getenv('WORKSPACE_PATH', '/workspace')}")
+    print(f"   API: http://127.0.0.1:{api_port}")
     print("=" * 50 + "\n")
 
 

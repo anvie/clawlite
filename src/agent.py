@@ -356,9 +356,11 @@ async def run_agent(
     # Translate response back to Indonesian if translation is enabled
     final_response = accumulated_response
     
-    # Fallback: if response is empty or only tool calls, include last tool result
-    clean_response = re.sub(r'<tool_?call>.*?</tool_?call>', '', final_response, flags=re.DOTALL | re.IGNORECASE).strip()
-    if not clean_response and last_tool_result:
+    # Always strip tool call tags from final response
+    final_response = re.sub(r'<tool_?call>.*?</tool_?call>', '', final_response, flags=re.DOTALL | re.IGNORECASE).strip()
+    
+    # Fallback: if response is empty (was only tool calls), include last tool result
+    if not final_response and last_tool_result:
         logger.info("Response was empty, falling back to last tool result")
         if last_tool_result["success"]:
             final_response = f"Result:\n```\n{last_tool_result['result']}\n```"

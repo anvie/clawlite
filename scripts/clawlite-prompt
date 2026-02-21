@@ -1,0 +1,40 @@
+#!/bin/bash
+# ClawLite - Run agent prompt and send response to user
+# Usage: clawlite-prompt <user_id> <prompt>
+#
+# Examples:
+#   clawlite-prompt tg_123456 "What's my schedule today?"
+#   clawlite-prompt tg_123456 "Check MEMORY.md and remind me of pending items"
+#   clawlite-prompt wa_628123 "Summarize yesterday's conversation"
+
+set -e
+
+API_PORT="${API_PORT:-8080}"
+API_HOST="${API_HOST:-127.0.0.1}"
+
+if [ $# -lt 2 ]; then
+    echo "Usage: clawlite-prompt <user_id> <prompt>" >&2
+    exit 1
+fi
+
+USER_ID="$1"
+shift
+PROMPT="$*"
+
+# Call API endpoint
+RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "http://${API_HOST}:${API_PORT}/api/prompt" \
+    -H "Content-Type: application/json" \
+    -d "{\"user\": \"${USER_ID}\", \"prompt\": \"${PROMPT}\"}" \
+    --max-time 300)
+
+# Extract HTTP status code (last line)
+HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+BODY=$(echo "$RESPONSE" | sed '$d')
+
+if [ "$HTTP_CODE" = "200" ]; then
+    echo "✓ Agent response sent to $USER_ID"
+    exit 0
+else
+    echo "✗ Failed (HTTP $HTTP_CODE): $BODY" >&2
+    exit 1
+fi

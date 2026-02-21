@@ -14,6 +14,7 @@ class APIServer:
     def __init__(
         self,
         send_callback: Callable[[str, str], Awaitable[bool]],
+        prompt_callback: Callable[[str, str], Awaitable[str]] = None,
         host: str = "127.0.0.1",
         port: int = 8080,
     ):
@@ -22,10 +23,12 @@ class APIServer:
         
         Args:
             send_callback: Async function(user_id, message) -> bool
+            prompt_callback: Async function(user_id, prompt) -> response_str
             host: Bind host (default localhost only)
             port: Bind port
         """
         self.send_callback = send_callback
+        self.prompt_callback = prompt_callback
         self.host = host
         self.port = port
         self.app = web.Application()
@@ -35,11 +38,76 @@ class APIServer:
     def _setup_routes(self):
         """Set up API routes."""
         self.app.router.add_post("/api/send", self._handle_send)
+        self.app.router.add_post("/api/prompt", self._handle_prompt)
         self.app.router.add_get("/api/health", self._handle_health)
     
     async def _handle_health(self, request: web.Request) -> web.Response:
         """Health check endpoint."""
         return web.json_response({"status": "ok"})
+    
+    async def _handle_prompt(self, request: web.Request) -> web.Response:
+        """
+        Run agent with prompt and send response to user.
+        
+        POST /api/prompt
+        Body: user=tg_123456&prompt=What's my schedule today?
+        Or JSON: {"user": "tg_123456", "prompt": "What's my schedule today?"}
+        """
+        try:
+            if not self.prompt_callback:
+                return web.json_response(
+                    {"error": "Prompt callback not configured"},
+                    status=500
+                )
+            
+            # Try JSON first, then form data
+            content_type = request.content_type
+            if content_type == "application/json":
+                data = await request.json()
+                user_id = data.get("user", "")
+                prompt = data.get("prompt", "")
+            else:
+                data = await request.post()
+                user_id = data.get("user", "")
+                prompt = data.get("prompt", "")
+            
+            if not user_id or not prompt:
+                return web.json_response(
+                    {"error": "Missing 'user' or 'prompt' parameter"},
+                    status=400
+                )
+            
+            logger.info(f"API prompt request: user={user_id}, prompt_len={len(prompt)}")
+            
+            # Run agent and get response
+            response = await self.prompt_callback(user_id, prompt)
+            
+            if response:
+                # Send response to user
+                sent = await self.send_callback(user_id, response)
+                if sent:
+                    return web.json_response({
+                        "status": "sent",
+                        "user": user_id,
+                        "response_len": len(response)
+                    })
+                else:
+                    return web.json_response(
+                        {"error": "Agent responded but failed to send message"},
+                        status=500
+                    )
+            else:
+                return web.json_response(
+                    {"error": "Agent returned empty response"},
+                    status=500
+                )
+                
+        except Exception as e:
+            logger.exception("API prompt error")
+            return web.json_response(
+                {"error": str(e)},
+                status=500
+            )
     
     async def _handle_send(self, request: web.Request) -> web.Response:
         """

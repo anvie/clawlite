@@ -116,9 +116,24 @@ async def run_channels():
     # Store globally for API access
     _active_channels = active_channels
     
+    # Prompt callback for API (runs agent and returns response)
+    async def prompt_and_respond(user_id: str, prompt: str) -> str:
+        """Run agent with prompt and return response."""
+        if user_id not in conversations:
+            conversations[user_id] = []
+        
+        result = await run_agent(
+            prompt,
+            conversations[user_id],
+            user_id=user_id,
+        )
+        
+        conversations[user_id] = result.history
+        return result.response
+    
     # Setup API server
     api_port = int(os.getenv("API_PORT", config_get("api.port", 8080)))
-    api_server = APIServer(send_to_user, port=api_port)
+    api_server = APIServer(send_to_user, prompt_callback=prompt_and_respond, port=api_port)
     
     # Setup signal handlers for graceful shutdown
     shutdown_event = asyncio.Event()

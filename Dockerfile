@@ -31,7 +31,8 @@ COPY config-example.yaml ./config-example.yaml
 # Copy entrypoint and CLI scripts
 COPY docker-entrypoint.sh /usr/local/bin/
 COPY scripts/clawlite-send /usr/local/bin/
-RUN chmod +x /usr/local/bin/docker-entrypoint.sh /usr/local/bin/clawlite-send
+COPY scripts/clawlite-prompt /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh /usr/local/bin/clawlite-send /usr/local/bin/clawlite-prompt
 
 # Create data directories
 RUN mkdir -p /data/whatsapp && chown -R clawlite:clawlite /data

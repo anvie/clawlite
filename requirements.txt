@@ -17,3 +17,4 @@ trafilatura>=2.0.0
 # Cron validation
 croniter>=2.0.0
 aiohttp>=3.9.0
+pytz>=2024.1

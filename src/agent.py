@@ -193,8 +193,25 @@ async def run_agent(
         ensure_user_dir(user_id)
         user_context = load_full_context(user_id)
         
-        # Add runtime context with user_id for cron/reminder commands
-        runtime_context = f"## Runtime Info\n- Current user ID: `{user_id}`\n- Use this ID for `clawlite-send` commands in cron jobs\n"
+        # Add runtime context with user_id and current datetime
+        from datetime import datetime
+        import pytz
+        
+        # Get current time in WIB (UTC+7)
+        try:
+            tz = pytz.timezone('Asia/Jakarta')
+            now = datetime.now(tz)
+        except:
+            now = datetime.now()
+        
+        datetime_str = now.strftime("%Y-%m-%d %H:%M:%S %Z")
+        day_name = now.strftime("%A")
+        
+        runtime_context = f"""## Runtime Info
+- Current datetime: `{datetime_str}` ({day_name})
+- Current user ID: `{user_id}`
+- Use this ID for `clawlite-send` commands in cron jobs
+"""
         
         if user_context:
             system_prompt += f"\n\n# Context\n\n{runtime_context}\n{user_context}"

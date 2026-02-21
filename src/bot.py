@@ -320,7 +320,7 @@ def main() -> None:
     
     print(f"🚀 ClawLite started!")
     if llm_provider == "openrouter":
-        model = os.getenv("OPENROUTER_MODEL", "google/gemini-2.5-pro-preview-03-25")
+        model = os.getenv("OPENROUTER_MODEL", "google/gemini-2.0-flash-001")
         print(f"   Provider: OpenRouter")
         print(f"   Model: {model}")
     else:

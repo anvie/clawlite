@@ -130,7 +130,7 @@ ENV_TEMPLATE = """# ClawLite Instance: {instance_name}
 # === LLM Provider ===
 LLM_PROVIDER=openrouter
 OPENROUTER_API_KEY=your-api-key-here
-OPENROUTER_MODEL=google/gemini-2.5-flash-preview
+OPENROUTER_MODEL=google/gemini-2.0-flash-001
 
 # === Telegram ===
 TELEGRAM_TOKEN=your-telegram-bot-token

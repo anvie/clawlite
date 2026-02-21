@@ -19,6 +19,7 @@ from telegram.ext import (
 )
 
 from .base import BaseChannel, WORKSPACE
+from ..errors import sanitize_error
 
 logger = logging.getLogger(__name__)
 
@@ -250,7 +251,7 @@ class TelegramChannel(BaseChannel):
             
         except Exception as e:
             self.logger.error(f"Error for user {user_id}: {e}")
-            await status_msg.edit_text(f"❌ Error: {str(e)[:500]}")
+            await status_msg.edit_text(f"❌ {sanitize_error(e)}")
     
     async def _send_file(
         self,
@@ -301,7 +302,7 @@ class TelegramChannel(BaseChannel):
             
         except Exception as e:
             self.logger.error(f"Failed to send file: {e}")
-            await status_msg.edit_text(f"❌ Failed to send file: {str(e)[:200]}")
+            await status_msg.edit_text(f"❌ Gagal mengirim file. Coba lagi.")
     
     async def _send_chunked(
         self,
@@ -369,7 +370,7 @@ class TelegramChannel(BaseChannel):
             
         except Exception as e:
             self.logger.error(f"Error handling photo from {user_id}: {e}")
-            await update.message.reply_text(f"❌ Failed to process image: {str(e)[:200]}")
+            await update.message.reply_text(f"❌ Gagal memproses gambar. Coba lagi.")
     
     async def _handle_document(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle document messages."""
@@ -416,4 +417,4 @@ class TelegramChannel(BaseChannel):
             
         except Exception as e:
             self.logger.error(f"Error handling document from {user_id}: {e}")
-            await update.message.reply_text(f"❌ Failed to process file: {str(e)[:200]}")
+            await update.message.reply_text(f"❌ Gagal memproses file. Coba lagi.")

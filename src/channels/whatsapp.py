@@ -45,6 +45,7 @@ except ImportError:
     ContextInfo = None
 
 from .base import BaseChannel, WORKSPACE
+from ..errors import sanitize_error
 
 logger = logging.getLogger(__name__)
 
@@ -381,7 +382,7 @@ class WhatsAppChannel(BaseChannel):
             except Exception as e:
                 await self.send_typing(raw_user_id, False)
                 self.logger.error(f"Agent error: {e}")
-                await self.send_message(raw_user_id, f"❌ Error: {str(e)[:500]}")
+                await self.send_message(raw_user_id, f"❌ {sanitize_error(e)}")
                 
         except Exception as e:
             self.logger.error(f"Message handler error: {e}")
@@ -435,7 +436,7 @@ class WhatsAppChannel(BaseChannel):
                     
         except Exception as e:
             self.logger.error(f"Failed to send file: {e}")
-            await self.send_message(user_id, f"❌ Failed to send file: {str(e)[:200]}")
+            await self.send_message(user_id, f"❌ Gagal mengirim file. Coba lagi.")
     
     async def _send_long_message(self, user_id: str, text: str, max_len: int = 4000) -> None:
         """Send long text in chunks."""

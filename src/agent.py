@@ -14,6 +14,7 @@ from .tools import get_tool, format_tools_for_prompt, SKILL_TOOLS
 from .translation import translate_to_english, translate_to_indonesian, TRANSLATION_ENABLED
 from .context import load_full_context, ensure_user_dir, is_bot_unconfigured
 from .config import get as config_get
+from .errors import sanitize_error, format_user_error
 
 logger = logging.getLogger("clawlite.agent")
 
@@ -262,11 +263,11 @@ async def run_agent(
                     
         except Exception as e:
             logger.error(f"LLM streaming failed after retries: {e}")
-            error_msg = f"I encountered an error communicating with the AI model: {str(e)}"
+            error_msg = sanitize_error(e)
             if accumulated_response:
-                accumulated_response += f"\n\n[Error: {error_msg}]"
+                accumulated_response += f"\n\n❌ {error_msg}"
             else:
-                accumulated_response = error_msg
+                accumulated_response = f"❌ {error_msg}"
             break
         
         # Extract response after thinking

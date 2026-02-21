@@ -11,8 +11,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gosu \
     && rm -rf /var/lib/apt/lists/*
 
-# Create non-root user
-RUN groupadd -r clawlite && useradd -r -g clawlite -d /app -s /sbin/nologin clawlite
+# Create non-root user (add to crontab group for cron access)
+RUN groupadd -r clawlite && useradd -r -g clawlite -G crontab -d /app -s /sbin/nologin clawlite
 
 WORKDIR /app
 

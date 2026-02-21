@@ -5,12 +5,10 @@ services:
     restart: unless-stopped
     
     # Security settings
-    user: "1000:1000"
-    read_only: true
+    # NOTE: Entrypoint starts as root to run cron daemon, then drops to clawlite user
+    # read_only disabled to allow cron to write spool files
     security_opt:
       - no-new-privileges:true
-    cap_drop:
-      - ALL
     
     # Resource limits
     mem_limit: 512m
@@ -33,6 +31,9 @@ services:
     # Tmpfs for writable areas
     tmpfs:
       - /app/__pycache__:size=50m
+      - /var/run:size=10m
+      - /var/spool/cron:size=10m
+      - /run:size=10m
     
     # Network - needs access to Ollama and Telegram API
     # Add extra_hosts if Ollama is on a different machine:

@@ -13,6 +13,17 @@ RUN_USER="clawlite"
 # Start cron daemon (requires root)
 if [ "$(id -u)" = "0" ]; then
     echo "🕐 Starting cron daemon..."
+    
+    # Ensure crontab directories exist with correct permissions
+    mkdir -p /var/spool/cron/crontabs
+    chown root:crontab /var/spool/cron/crontabs
+    chmod 1730 /var/spool/cron/crontabs
+    
+    # Allow clawlite user to use crontab
+    touch /var/spool/cron/crontabs/clawlite
+    chown clawlite:crontab /var/spool/cron/crontabs/clawlite
+    chmod 600 /var/spool/cron/crontabs/clawlite
+    
     service cron start || cron
     echo "✓ Cron daemon started"
 fi

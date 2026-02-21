@@ -216,7 +216,7 @@ class TelegramChannel(BaseChannel):
             # Import agent here to avoid circular imports
             from ..agent import run_agent
             
-            response, new_history = await run_agent(
+            result = await run_agent(
                 user_message,
                 self.conversations[user_id],
                 user_id=user_id,
@@ -224,14 +224,19 @@ class TelegramChannel(BaseChannel):
                 images=images,
             )
             
-            self.conversations[user_id] = new_history
+            self.conversations[user_id] = result.history
+            
+            # Handle file response from skills
+            if result.file_data:
+                await self._send_file(update, status_msg, result.file_data)
+                return
             
             # Clean up response
             import re
             final_text = re.sub(
                 r'<tool_?call>.*?</tool_?call>',
                 '',
-                response,
+                result.response,
                 flags=re.DOTALL | re.IGNORECASE
             )
             final_text = final_text.strip()
@@ -246,6 +251,57 @@ class TelegramChannel(BaseChannel):
         except Exception as e:
             self.logger.error(f"Error for user {user_id}: {e}")
             await status_msg.edit_text(f"❌ Error: {str(e)[:500]}")
+    
+    async def _send_file(
+        self,
+        update: Update,
+        status_msg,
+        file_data: dict,
+    ) -> None:
+        """Send a file to the user."""
+        try:
+            import io
+            
+            filename = file_data.get("filename", "file")
+            caption = file_data.get("caption", "")
+            data_b64 = file_data.get("data", "")
+            content_type = file_data.get("content_type", "application/octet-stream")
+            
+            # Decode base64 data
+            file_bytes = base64.b64decode(data_b64)
+            file_obj = io.BytesIO(file_bytes)
+            file_obj.name = filename
+            
+            # Delete status message
+            try:
+                await status_msg.delete()
+            except Exception:
+                pass
+            
+            # Send based on content type
+            if "pdf" in content_type:
+                await update.message.reply_document(
+                    document=file_obj,
+                    filename=filename,
+                    caption=caption,
+                )
+            elif content_type.startswith("image/"):
+                await update.message.reply_photo(
+                    photo=file_obj,
+                    caption=caption,
+                )
+            else:
+                await update.message.reply_document(
+                    document=file_obj,
+                    filename=filename,
+                    caption=caption,
+                )
+            
+            self.logger.info(f"📤 Sent file: {filename} ({len(file_bytes)} bytes)")
+            
+        except Exception as e:
+            self.logger.error(f"Failed to send file: {e}")
+            await status_msg.edit_text(f"❌ Failed to send file: {str(e)[:200]}")
     
     async def _send_chunked(
         self,

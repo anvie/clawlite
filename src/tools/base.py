@@ -15,6 +15,7 @@ class ToolResult:
     success: bool
     output: str
     error: Optional[str] = None
+    file_data: Optional[dict] = None  # For file responses (skills)
 
 
 class Tool(ABC):

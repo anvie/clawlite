@@ -45,6 +45,14 @@ class SkillTool(Tool):
             if asyncio.iscoroutine(result):
                 result = await result
             
+            # Handle file responses (dict with __file__: True)
+            if isinstance(result, dict) and result.get("__file__"):
+                return ToolResult(
+                    success=True,
+                    output="",  # Empty output, file data in metadata
+                    file_data=result,
+                )
+            
             return ToolResult(
                 success=True,
                 output=str(result) if result else "Done"

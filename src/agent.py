@@ -6,6 +6,7 @@ import os
 import time
 import asyncio
 import logging
+from dataclasses import dataclass
 from typing import Optional, Callable, Awaitable
 
 from .llm import stream_generate
@@ -144,6 +145,14 @@ async def stream_with_retry(prompt: str, images: list = None, max_retries: int =
         raise last_error
 
 
+@dataclass
+class AgentResult:
+    """Result from agent run."""
+    response: str
+    history: list[dict]
+    file_data: Optional[dict] = None  # For file responses from skills
+
+
 async def run_agent(
     user_message: str,
     history: list[dict],
@@ -151,7 +160,7 @@ async def run_agent(
     status_callback: Optional[Callable[[str], Awaitable[None]]] = None,
     max_iterations: int = 10,
     images: list[str] = None,  # List of base64 encoded images
-) -> tuple[str, list[dict]]:
+) -> AgentResult:
     """
     Run the agent loop.
     
@@ -202,6 +211,7 @@ async def run_agent(
     accumulated_response = ""
     thinking_shown = False
     last_tool_result = None  # Track last tool result for fallback
+    pending_file_data = None  # Track file data from skills
     
     while iterations < max_iterations:
         iterations += 1
@@ -298,8 +308,12 @@ async def run_agent(
                 if tool:
                     result = await execute_tool_with_timeout(tool, tool_args)
                     
-                    # Format result for context (internal only, not shown to user)
-                    if result.success:
+                    # Check for file data (from skills)
+                    if result.file_data:
+                        pending_file_data = result.file_data
+                        result_text = f"File ready: {result.file_data.get('filename', 'file')}"
+                        logger.info(f"Tool {tool_name} returned file: {result.file_data.get('filename')}")
+                    elif result.success:
                         result_text = f"{result.output[:2000]}"
                         logger.info(f"Tool {tool_name} succeeded, output length: {len(result.output)}")
                     else:
@@ -357,4 +371,8 @@ async def run_agent(
     elapsed = time.time() - start_time
     logger.info(f"Agent run completed in {elapsed:.2f}s, iterations: {iterations}, response length: {len(final_response)}")
     
-    return final_response, new_history
+    return AgentResult(
+        response=final_response,
+        history=new_history,
+        file_data=pending_file_data,
+    )

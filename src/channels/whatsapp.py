@@ -346,7 +346,7 @@ class WhatsAppChannel(BaseChannel):
                 
                 async def noop_status(x): pass
                 
-                response, new_history = await run_agent(
+                result = await run_agent(
                     text,
                     self.conversations[user_id],
                     user_id=user_id,  # Pass prefixed user_id
@@ -354,19 +354,24 @@ class WhatsAppChannel(BaseChannel):
                     images=None,
                 )
                 
-                self.conversations[user_id] = new_history
+                self.conversations[user_id] = result.history
+                
+                # Stop typing indicator (use raw ID for WhatsApp API)
+                await self.send_typing(raw_user_id, False)
+                
+                # Handle file response from skills
+                if result.file_data:
+                    await self._send_file(raw_user_id, result.file_data)
+                    return
                 
                 # Clean tool calls from response
                 final_text = re.sub(
                     r'<tool_?call>.*?</tool_?call>',
                     '',
-                    response,
+                    result.response,
                     flags=re.DOTALL | re.IGNORECASE
                 )
                 final_text = final_text.strip()
-                
-                # Stop typing indicator (use raw ID for WhatsApp API)
-                await self.send_typing(raw_user_id, False)
                 
                 if final_text:
                     await self._send_long_message(raw_user_id, final_text)
@@ -380,6 +385,57 @@ class WhatsAppChannel(BaseChannel):
                 
         except Exception as e:
             self.logger.error(f"Message handler error: {e}")
+    
+    async def _send_file(self, user_id: str, file_data: dict) -> None:
+        """Send a file to the user."""
+        if not self.client or not self.connected:
+            self.logger.error("WhatsApp not connected")
+            return
+        
+        try:
+            import io
+            import tempfile
+            
+            filename = file_data.get("filename", "file")
+            caption = file_data.get("caption", "")
+            data_b64 = file_data.get("data", "")
+            content_type = file_data.get("content_type", "application/octet-stream")
+            
+            # Decode base64 data
+            file_bytes = base64.b64decode(data_b64)
+            
+            # Save to temp file (neonize needs file path)
+            with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(filename)[1]) as tmp:
+                tmp.write(file_bytes)
+                tmp_path = tmp.name
+            
+            try:
+                jid = self._parse_jid(user_id)
+                
+                # Send document
+                await asyncio.get_event_loop().run_in_executor(
+                    None,
+                    lambda: self.client.send_document(
+                        jid,
+                        tmp_path,
+                        caption=caption,
+                        filename=filename,
+                        mimetype=content_type,
+                    )
+                )
+                
+                self.logger.info(f"📤 Sent file: {filename} ({len(file_bytes)} bytes)")
+                
+            finally:
+                # Clean up temp file
+                try:
+                    os.unlink(tmp_path)
+                except:
+                    pass
+                    
+        except Exception as e:
+            self.logger.error(f"Failed to send file: {e}")
+            await self.send_message(user_id, f"❌ Failed to send file: {str(e)[:200]}")
     
     async def _send_long_message(self, user_id: str, text: str, max_len: int = 4000) -> None:
         """Send long text in chunks."""

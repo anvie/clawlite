@@ -8,3 +8,10 @@ python-telegram-bot==21.0
 # WhatsApp (optional - comment out if not needed)
 neonize>=0.3.14
 qrcode>=7.4
+
+# Web tools
+duckduckgo-search>=7.0.0
+trafilatura>=2.0.0
+
+# Cron validation
+croniter>=2.0.0

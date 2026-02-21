@@ -7,6 +7,7 @@ from .shell import ExecTool, RunBashTool, RunPythonTool, KillProcessTool, ListPr
 from .search import GrepTool, FindFilesTool
 from .cron import ListCronTool, AddCronTool, RemoveCronTool
 from .memory import MemoryLogTool, MemoryReadTool, MemoryUpdateTool, UserUpdateTool
+from .web import WebSearchTool, WebFetchTool
 from .skill_tools import load_skill_tools
 
 # Registry of all available tools (non-user-scoped)
@@ -24,6 +25,8 @@ TOOLS = {
     "list_cron": ListCronTool(),
     "add_cron": AddCronTool(),
     "remove_cron": RemoveCronTool(),
+    "web_search": WebSearchTool(),
+    "web_fetch": WebFetchTool(),
 }
 
 # Load and register skill-based tools

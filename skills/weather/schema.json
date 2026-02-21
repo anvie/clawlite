@@ -1,7 +1,0 @@
-{
-  "tool": "weather_tool",
-  "description": "Get weather forecasts from wttr.in",
-  "args": {
-    "example_param": "string"
-  }
-}

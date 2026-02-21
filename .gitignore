@@ -37,3 +37,6 @@ data/whatsapp/
 
 # Python virtual environment
 .venv/
+
+# Domain-specific skills (install separately)
+skills/krasan_invoice/

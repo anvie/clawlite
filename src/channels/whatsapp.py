@@ -335,6 +335,11 @@ class WhatsAppChannel(BaseChannel):
             
             self.logger.info(f"📩 Processing [{user_id}]: {text[:50]}...")
             
+            # Handle /clear command
+            if text.strip() == "/clear":
+                await self._handle_clear(user_id, raw_user_id)
+                return
+            
             # Get conversation history
             if user_id not in self.conversations:
                 self.conversations[user_id] = []
@@ -437,6 +442,22 @@ class WhatsAppChannel(BaseChannel):
         except Exception as e:
             self.logger.error(f"Failed to send file: {e}")
             await self.send_message(user_id, f"❌ Gagal mengirim file. Coba lagi.")
+    
+    async def _handle_clear(self, user_id: str, raw_user_id: str) -> None:
+        """Handle /clear command."""
+        # Clear in-memory history
+        self.conversations[user_id] = []
+        
+        # Clear persisted conversation
+        try:
+            from ..conversation import clear_today, is_enabled
+            if is_enabled():
+                clear_today(user_id)
+        except Exception as e:
+            self.logger.warning(f"Failed to clear persisted conversation: {e}")
+        
+        self.logger.info(f"🗑️ Cleared history for {user_id}")
+        await self.send_message(raw_user_id, "🗑️ History cleared.")
     
     async def _send_long_message(self, user_id: str, text: str, max_len: int = 4000) -> None:
         """Send long text in chunks."""

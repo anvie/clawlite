@@ -12,7 +12,7 @@ from typing import Optional, Callable, Awaitable
 from .llm import stream_generate
 from .tools import get_tool, format_tools_for_prompt, SKILL_TOOLS
 from .translation import translate_to_english, translate_to_indonesian, TRANSLATION_ENABLED
-from .context import load_full_context, ensure_user_dir, is_bot_unconfigured
+from .context import load_full_context, ensure_user_dir, is_bot_unconfigured, load_conversation_history
 from .config import get as config_get
 from .errors import sanitize_error, format_user_error
 
@@ -178,6 +178,12 @@ async def run_agent(
     """
     start_time = time.time()
     logger.info(f"Agent run started for user {user_id}, message length: {len(user_message)}")
+    
+    # Load persisted conversation history if none provided
+    if not history and user_id:
+        history = load_conversation_history(user_id)
+        if history:
+            logger.info(f"Loaded {len(history)} persisted messages for {user_id}")
     
     # Load system prompt (with onboarding if bot unconfigured)
     system_prompt = load_system_prompt()
@@ -368,6 +374,16 @@ async def run_agent(
     # Keep history bounded
     if len(new_history) > 20:
         new_history = new_history[-20:]
+    
+    # Save conversation to JSONL if enabled
+    if user_id:
+        try:
+            from .conversation import append_message, is_enabled
+            if is_enabled():
+                append_message(user_id, "user", user_message)
+                append_message(user_id, "assistant", final_response)
+        except Exception as e:
+            logger.warning(f"Failed to save conversation: {e}")
     
     elapsed = time.time() - start_time
     logger.info(f"Agent run completed in {elapsed:.2f}s, iterations: {iterations}, response length: {len(final_response)}")

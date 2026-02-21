@@ -49,6 +49,11 @@ channels:
   whatsapp:
     enabled: false
 
+# Conversation persistence
+conversation:
+  record: false           # Enable recording (default OFF)
+  retention_days: 3       # Auto-delete files older than this
+
 # Logging
 logging:
   level: INFO  # DEBUG | INFO | WARNING | ERROR

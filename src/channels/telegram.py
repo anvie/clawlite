@@ -125,7 +125,18 @@ class TelegramChannel(BaseChannel):
         user_id = self.format_user_id(update.effective_user.id)
         if not self.is_allowed(user_id):
             return
+        
+        # Clear in-memory history
         self.conversations[user_id] = []
+        
+        # Clear persisted conversation
+        try:
+            from ..conversation import clear_today, is_enabled
+            if is_enabled():
+                clear_today(user_id)
+        except Exception as e:
+            self.logger.warning(f"Failed to clear persisted conversation: {e}")
+        
         self.logger.info(f"🗑️ Cleared history for {user_id}")
         await update.message.reply_text("🗑️ History cleared.")
     

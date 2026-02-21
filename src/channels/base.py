@@ -151,6 +151,10 @@ class BaseChannel(ABC):
         if not self.is_allowed(user_id):
             return "⛔ Not authorized."
         
+        # Handle /clear command
+        if text.strip() == "/clear":
+            return await self._handle_clear(user_id)
+        
         # Default status callback that does nothing
         if status_callback is None:
             status_callback = lambda x: None
@@ -166,3 +170,27 @@ class BaseChannel(ABC):
         except Exception as e:
             self.logger.error(f"Error processing message from {user_id}: {e}")
             return f"❌ Error: {str(e)[:500]}"
+    
+    async def _handle_clear(self, user_id: str) -> str:
+        """
+        Handle /clear command to clear conversation history.
+        
+        Args:
+            user_id: Prefixed user ID
+        
+        Returns:
+            Confirmation message
+        """
+        try:
+            from ..conversation import clear_today, is_enabled
+            
+            if not is_enabled():
+                return "ℹ️ Conversation recording is not enabled."
+            
+            clear_today(user_id)
+            self.logger.info(f"Cleared conversation for {user_id} via /clear command")
+            return "🗑️ Conversation cleared."
+            
+        except Exception as e:
+            self.logger.error(f"Failed to clear conversation for {user_id}: {e}")
+            return f"❌ Failed to clear: {str(e)[:200]}"

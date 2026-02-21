@@ -113,6 +113,24 @@ def load_full_context(user_id: str) -> str:
     return "\n\n===\n\n".join(parts)
 
 
+def load_conversation_history(user_id: str) -> list[dict]:
+    """
+    Load persisted conversation history for a user.
+    Only loads today's messages if conversation recording is enabled.
+    
+    Args:
+        user_id: Prefixed user ID (e.g., "tg_123456")
+    
+    Returns:
+        List of message dicts with 'role' and 'content' keys
+    """
+    try:
+        from .conversation import load_today
+        return load_today(user_id)
+    except ImportError:
+        return []
+
+
 def get_today_memory_path(user_id: str) -> Path:
     """Get path to today's memory file for a user."""
     user_dir = ensure_user_dir(user_id)

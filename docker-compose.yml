@@ -22,14 +22,14 @@ services:
     volumes:
       - ./workspace:/workspace:rw
       - ./skills:/app/skills:ro
-      - /tmp/clawlite:/tmp:rw
       - ./src:/app/src:ro
       - ./prompts:/app/prompts:ro
       # WhatsApp session persistence
       - ./data/whatsapp:/data/whatsapp:rw
     
-    # Tmpfs for writable areas
+    # Tmpfs for writable areas (world-writable where needed)
     tmpfs:
+      - /tmp:size=100m,mode=1777
       - /app/__pycache__:size=50m
       - /var/run:size=10m
       - /var/spool/cron:size=10m

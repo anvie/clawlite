@@ -484,15 +484,27 @@ def stop_instance(instance_name: str) -> bool:
 
 
 def restart_instance(instance_name: str) -> bool:
-    """Restart an instance."""
+    """Restart an instance (down + up to reload env/config)."""
     path = get_instance_path(instance_name)
     if not os.path.exists(path):
         logger.error(f"Instance '{instance_name}' not found")
         return False
     
     try:
+        # Use down + up instead of restart to reload env vars
         result = subprocess.run(
-            ["docker", "compose", "restart"],
+            ["docker", "compose", "down"],
+            cwd=path,
+            capture_output=True,
+            text=True,
+            timeout=60
+        )
+        if result.returncode != 0:
+            logger.error(f"Failed to stop: {result.stderr}")
+            return False
+        
+        result = subprocess.run(
+            ["docker", "compose", "up", "-d"],
             cwd=path,
             capture_output=True,
             text=True,
@@ -502,7 +514,7 @@ def restart_instance(instance_name: str) -> bool:
             logger.info(f"Restarted instance '{instance_name}'")
             return True
         else:
-            logger.error(f"Failed to restart: {result.stderr}")
+            logger.error(f"Failed to start: {result.stderr}")
             return False
     except Exception as e:
         logger.error(f"Failed to restart instance: {e}")

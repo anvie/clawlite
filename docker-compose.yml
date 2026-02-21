@@ -25,6 +25,8 @@ services:
       - ./src:/app/src:ro
       - ./prompts:/app/prompts:ro
       - ./config.yaml:/app/config.yaml:ro
+      # Owner file for first-user-as-admin (writable, outside workspace)
+      - ./owner:/app/.owner:rw
       # WhatsApp session persistence
       - ./data/whatsapp:/data/whatsapp:rw
     

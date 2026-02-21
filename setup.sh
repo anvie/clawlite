@@ -47,6 +47,14 @@ fi
 mkdir -p data/whatsapp
 echo -e "${GREEN}✓ Created data/whatsapp${NC}"
 
+# Create owner file for first-user-as-admin
+if [ ! -f owner ]; then
+    touch owner
+    echo -e "${GREEN}✓ Created owner file (first user becomes admin)${NC}"
+else
+    echo -e "${GREEN}✓ Owner file already exists${NC}"
+fi
+
 echo ""
 echo "================="
 echo -e "${GREEN}Setup complete!${NC}"

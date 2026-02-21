@@ -1,6 +1,7 @@
 # Environment and config (contains secrets)
 .env
 config.yaml
+owner
 
 # Workspace data
 workspace/*

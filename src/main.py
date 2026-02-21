@@ -266,11 +266,66 @@ def main():
     send_parser.add_argument("-u", "--user", required=True, help="User ID (e.g., tg_123456)")
     send_parser.add_argument("-m", "--message", required=True, help="Message to send")
     
+    # Import CLI commands
+    from .cli.main import (
+        cmd_new_instance, cmd_instances_list, cmd_instances_start,
+        cmd_instances_stop, cmd_instances_remove, cmd_instances_path,
+        cmd_templates_list
+    )
+    from .cli import get_instances_dir
+    
+    # instances command
+    instances_parser = subparsers.add_parser("instances", help="Manage instances")
+    instances_sub = instances_parser.add_subparsers(dest="instances_cmd")
+    
+    new_parser = instances_sub.add_parser("new", help="Create a new instance from template")
+    new_parser.add_argument("template", help="Template reference (name, namespace/name, or path)")
+    new_parser.add_argument("name", help="Instance name")
+    new_parser.add_argument("--port", type=int, help="API port (auto-assigned if not specified)")
+    
+    list_parser = instances_sub.add_parser("list", help="List all instances")
+    start_parser = instances_sub.add_parser("start", help="Start an instance")
+    start_parser.add_argument("name", help="Instance name")
+    stop_parser = instances_sub.add_parser("stop", help="Stop an instance")
+    stop_parser.add_argument("name", help="Instance name")
+    remove_parser = instances_sub.add_parser("remove", help="Remove an instance")
+    remove_parser.add_argument("name", help="Instance name")
+    remove_parser.add_argument("--force", "-f", action="store_true", help="Force remove")
+    path_parser = instances_sub.add_parser("path", help="Get instance path")
+    path_parser.add_argument("name", help="Instance name")
+    
+    # templates command
+    templates_parser = subparsers.add_parser("templates", help="Manage templates")
+    templates_sub = templates_parser.add_subparsers(dest="templates_cmd")
+    tlist_parser = templates_sub.add_parser("list", help="List templates")
+    
     args = parser.parse_args()
     
     if args.command == "send":
         success = asyncio.run(send_message(args.user, args.message))
         sys.exit(0 if success else 1)
+    elif args.command == "instances":
+        if args.instances_cmd == "new":
+            sys.exit(cmd_new_instance(args))
+        elif args.instances_cmd == "list":
+            sys.exit(cmd_instances_list(args))
+        elif args.instances_cmd == "start":
+            sys.exit(cmd_instances_start(args))
+        elif args.instances_cmd == "stop":
+            sys.exit(cmd_instances_stop(args))
+        elif args.instances_cmd == "remove":
+            sys.exit(cmd_instances_remove(args))
+        elif args.instances_cmd == "path":
+            sys.exit(cmd_instances_path(args))
+        else:
+            instances_parser.print_help()
+            sys.exit(0)
+    elif args.command == "templates":
+        if args.templates_cmd == "list":
+            sys.exit(cmd_templates_list(args))
+        else:
+            templates_parser.print_help()
+            sys.exit(0)
     else:
         # Default: run channels
         asyncio.run(run_channels())

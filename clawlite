@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""ClawLite CLI entry point."""
+"""ClawLite CLI - Unified Entry Point."""
 
 import sys
 import os
@@ -7,27 +7,116 @@ import os
 # Add src to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
+
 def main():
-    if len(sys.argv) < 2:
-        print("Usage: clawlite <command> [args...]")
-        print()
-        print("Commands:")
-        print("  skill    Manage skills (new, list, install, remove, info)")
-        print("  run      Start the bot (same as python -m src.main)")
-        sys.exit(1)
+    import argparse
     
-    command = sys.argv[1]
-    sys.argv = sys.argv[1:]  # Shift args
+    parser = argparse.ArgumentParser(
+        prog="clawlite",
+        description="ClawLite - Lightweight Agentic AI"
+    )
+    subparsers = parser.add_subparsers(dest="command", help="Commands")
     
-    if command == "skill":
-        from cli.skill_manager import main as skill_main
-        skill_main()
-    elif command == "run":
+    # === run command ===
+    run_parser = subparsers.add_parser("run", help="Start the bot")
+    
+    # === send command ===
+    send_parser = subparsers.add_parser("send", help="Send a message to a user")
+    send_parser.add_argument("-u", "--user", required=True, help="User ID (e.g., tg_123456)")
+    send_parser.add_argument("-m", "--message", required=True, help="Message to send")
+    
+    # === skill command ===
+    skill_parser = subparsers.add_parser("skill", help="Manage skills")
+    skill_sub = skill_parser.add_subparsers(dest="skill_cmd")
+    
+    skill_new = skill_sub.add_parser("new", help="Create a new skill")
+    skill_new.add_argument("name", help="Skill name")
+    skill_new.add_argument("-d", "--description", help="Skill description")
+    
+    skill_list = skill_sub.add_parser("list", help="List installed skills")
+    
+    # === instances command ===
+    instances_parser = subparsers.add_parser("instances", help="Manage instances")
+    instances_sub = instances_parser.add_subparsers(dest="instances_cmd")
+    
+    inst_new = instances_sub.add_parser("new", help="Create a new instance from template")
+    inst_new.add_argument("template", help="Template reference (name, namespace/name, or path)")
+    inst_new.add_argument("name", help="Instance name")
+    inst_new.add_argument("--port", type=int, help="API port (auto-assigned if not specified)")
+    
+    inst_list = instances_sub.add_parser("list", help="List all instances")
+    inst_start = instances_sub.add_parser("start", help="Start an instance")
+    inst_start.add_argument("name", help="Instance name")
+    inst_stop = instances_sub.add_parser("stop", help="Stop an instance")
+    inst_stop.add_argument("name", help="Instance name")
+    inst_remove = instances_sub.add_parser("remove", help="Remove an instance")
+    inst_remove.add_argument("name", help="Instance name")
+    inst_remove.add_argument("--force", "-f", action="store_true", help="Force remove")
+    inst_path = instances_sub.add_parser("path", help="Get instance path")
+    inst_path.add_argument("name", help="Instance name")
+    
+    # === templates command ===
+    templates_parser = subparsers.add_parser("templates", help="Manage templates")
+    templates_sub = templates_parser.add_subparsers(dest="templates_cmd")
+    tmpl_list = templates_sub.add_parser("list", help="List templates")
+    
+    # Parse args
+    args = parser.parse_args()
+    
+    if args.command is None:
+        parser.print_help()
+        sys.exit(0)
+    
+    # === Handle commands ===
+    
+    if args.command == "run":
         from main import main as run_main
         import asyncio
         asyncio.run(run_main())
+    
+    elif args.command == "send":
+        from main import send_message
+        import asyncio
+        success = asyncio.run(send_message(args.user, args.message))
+        sys.exit(0 if success else 1)
+    
+    elif args.command == "skill":
+        from cli.skill_manager import main as skill_main
+        # Re-inject args for skill_manager
+        sys.argv = ["clawlite", "skill"] + sys.argv[2:]
+        skill_main()
+    
+    elif args.command == "instances":
+        from cli.main import (
+            cmd_new_instance, cmd_instances_list, cmd_instances_start,
+            cmd_instances_stop, cmd_instances_remove, cmd_instances_path
+        )
+        if args.instances_cmd == "new":
+            sys.exit(cmd_new_instance(args))
+        elif args.instances_cmd == "list":
+            sys.exit(cmd_instances_list(args))
+        elif args.instances_cmd == "start":
+            sys.exit(cmd_instances_start(args))
+        elif args.instances_cmd == "stop":
+            sys.exit(cmd_instances_stop(args))
+        elif args.instances_cmd == "remove":
+            sys.exit(cmd_instances_remove(args))
+        elif args.instances_cmd == "path":
+            sys.exit(cmd_instances_path(args))
+        else:
+            instances_parser.print_help()
+            sys.exit(0)
+    
+    elif args.command == "templates":
+        from cli.main import cmd_templates_list
+        if args.templates_cmd == "list":
+            sys.exit(cmd_templates_list(args))
+        else:
+            templates_parser.print_help()
+            sys.exit(0)
+    
     else:
-        print(f"Unknown command: {command}")
+        parser.print_help()
         sys.exit(1)
 
 

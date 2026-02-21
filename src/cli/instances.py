@@ -12,12 +12,15 @@ from .templates import resolve_template, fetch_template
 
 logger = logging.getLogger("clawlite.cli.instances")
 
+# Shared image name
+CLAWLITE_IMAGE = "clawlite:latest"
+
 # Docker compose template
 DOCKER_COMPOSE_TEMPLATE = """version: '3.8'
 
 services:
   clawlite:
-    image: anvie/clawlite:latest
+    image: clawlite:latest
     container_name: clawlite-{instance_name}
     restart: unless-stopped
     
@@ -35,6 +38,57 @@ services:
     tmpfs:
       - /tmp:size=100m,mode=1777
 """
+
+
+def get_clawlite_source() -> str:
+    """Get path to ClawLite source directory."""
+    candidates = [
+        os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))),
+        os.path.expanduser("~/dev/clawlite"),
+        os.environ.get("CLAWLITE_SOURCE", ""),
+    ]
+    
+    for path in candidates:
+        if path and os.path.exists(os.path.join(path, "Dockerfile")):
+            return os.path.abspath(path)
+    
+    return ""
+
+
+def ensure_clawlite_image() -> bool:
+    """Build clawlite:latest image if not exists."""
+    # Check if image exists
+    result = subprocess.run(
+        ["docker", "image", "inspect", CLAWLITE_IMAGE],
+        capture_output=True,
+        timeout=10
+    )
+    
+    if result.returncode == 0:
+        logger.info(f"Image {CLAWLITE_IMAGE} already exists")
+        return True
+    
+    # Build image
+    source = get_clawlite_source()
+    if not source:
+        logger.error("ClawLite source not found. Set CLAWLITE_SOURCE env var.")
+        return False
+    
+    logger.info(f"Building {CLAWLITE_IMAGE} from {source}...")
+    print(f"🔨 Building {CLAWLITE_IMAGE}...")
+    
+    result = subprocess.run(
+        ["docker", "build", "-t", CLAWLITE_IMAGE, source],
+        timeout=300
+    )
+    
+    if result.returncode == 0:
+        logger.info(f"Built {CLAWLITE_IMAGE} successfully")
+        print(f"✅ Built {CLAWLITE_IMAGE}")
+        return True
+    else:
+        logger.error(f"Failed to build {CLAWLITE_IMAGE}")
+        return False
 
 # Default config template
 CONFIG_TEMPLATE = """# ClawLite Configuration - {instance_name}
@@ -317,6 +371,12 @@ def create_instance(
     # Find available port if not specified
     if api_port is None:
         api_port = find_available_port()
+    
+    # Ensure clawlite:latest image exists
+    if not ensure_clawlite_image():
+        import shutil
+        shutil.rmtree(instance_path, ignore_errors=True)
+        return False
     
     # Generate docker-compose.yml if not from template
     compose_file = os.path.join(instance_path, "docker-compose.yml")

@@ -1,5 +1,5 @@
 # ClawLite Configuration
-# Environment override: CLAWLITE_CONFIG=/path/to/config.yaml
+# Copy this file to config.yaml and customize
 
 # Access control
 access:
@@ -51,7 +51,7 @@ channels:
 
 # Conversation persistence
 conversation:
-  record: false           # Enable recording (default OFF)
+  record: false           # Enable recording
   retention_days: 3       # Auto-delete files older than this
 
 # Logging

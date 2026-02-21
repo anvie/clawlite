@@ -10,19 +10,19 @@ _config: dict = None
 
 
 def load_config() -> dict:
-    """Load config from config/clawlite.yaml"""
+    """Load config from config.yaml in project root."""
     global _config
     if _config is not None:
         return _config
     
-    config_path = os.environ.get("CLAWLITE_CONFIG", "config/clawlite.yaml")
+    config_path = os.environ.get("CLAWLITE_CONFIG", "config.yaml")
     
-    # Try relative to src/ first, then absolute
+    # Try relative to src/ first (project root), then cwd
     if not os.path.isabs(config_path):
         src_dir = os.path.dirname(__file__)
         candidates = [
-            os.path.join(src_dir, "..", config_path),
-            config_path,
+            os.path.join(src_dir, "..", config_path),  # project root
+            config_path,  # cwd
         ]
     else:
         candidates = [config_path]

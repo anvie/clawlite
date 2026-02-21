@@ -1,5 +1,6 @@
-# Environment (contains secrets)
+# Environment and config (contains secrets)
 .env
+config.yaml
 
 # Workspace data
 workspace/*

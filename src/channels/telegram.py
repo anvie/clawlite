@@ -137,11 +137,18 @@ class TelegramChannel(BaseChannel):
         from ..tools import list_tools
         tools = list_tools(user_id=user_id)
         
-        text = "🔧 *Available Tools:*\n\n"
+        text = "🔧 Available Tools:\n\n"
         for t in tools:
-            text += f"• `{t['name']}` - {t['description']}\n"
+            # Keep description short to avoid Telegram message limits
+            desc = t['description'][:80] + "..." if len(t['description']) > 80 else t['description']
+            text += f"• {t['name']} — {desc}\n"
         
-        await update.message.reply_text(text, parse_mode="Markdown")
+        # Try Markdown first, fallback to plain text
+        try:
+            await update.message.reply_text(text)
+        except Exception as e:
+            self.logger.error(f"Failed to send tools list: {e}")
+            await update.message.reply_text("Error listing tools")
     
     async def _cmd_workspace(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle /workspace command."""

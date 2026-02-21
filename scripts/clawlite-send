@@ -1,0 +1,22 @@
+#!/bin/bash
+# ClawLite - Send message to user
+# Usage: clawlite-send <user_id> <message>
+#
+# Examples:
+#   clawlite-send tg_123456 "Time to ngaji!"
+#   clawlite-send wa_628123 "Reminder: Meeting in 5 min"
+
+set -e
+
+if [ $# -lt 2 ]; then
+    echo "Usage: clawlite-send <user_id> <message>" >&2
+    exit 1
+fi
+
+USER_ID="$1"
+shift
+MESSAGE="$*"
+
+# Run the Python CLI
+cd /app
+exec python -m src.cli.send --user "$USER_ID" --message "$MESSAGE"

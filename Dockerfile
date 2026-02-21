@@ -26,9 +26,10 @@ COPY prompts/ ./prompts/
 COPY config/ ./config/
 COPY templates/ ./templates/
 
-# Copy entrypoint script
+# Copy entrypoint and CLI scripts
 COPY docker-entrypoint.sh /usr/local/bin/
-RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+COPY scripts/clawlite-send /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh /usr/local/bin/clawlite-send
 
 # Create data directories
 RUN mkdir -p /data/whatsapp && chown -R clawlite:clawlite /data

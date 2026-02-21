@@ -20,7 +20,21 @@ A lightweight agentic AI assistant with multi-channel support. Connect via Teleg
 - **Messaging:** Telegram bot token and/or WhatsApp (phone to scan QR)
 - **LLM:** Ollama running (locally or remote) OR OpenRouter API key
 
-### Setup
+### Option 1: Create from Template (recommended)
+
+```bash
+git clone https://github.com/anvie/clawlite.git
+cd clawlite
+
+# Create instance from template
+./clawlite instances new villa-cs my-villa
+
+# Follow the interactive wizard to configure
+# Then start your instance
+./clawlite instances start my-villa
+```
+
+### Option 2: Manual Setup
 
 ```bash
 git clone https://github.com/anvie/clawlite.git
@@ -50,6 +64,32 @@ docker logs -f clawlite-agent
 ```bash
 pip install -r requirements.txt
 python -m src.main
+```
+
+## CLI Commands
+
+ClawLite provides a unified CLI for managing instances and templates:
+
+```bash
+# Run ClawLite directly (manual setup)
+./clawlite run
+
+# Send message via internal API
+./clawlite send <user_id> <message>
+
+# Skill management
+./clawlite skill new <name> [-d "description"]
+
+# Instance management
+./clawlite instances new <template> <name>
+./clawlite instances list
+./clawlite instances start <name>
+./clawlite instances stop <name>
+./clawlite instances remove <name>
+./clawlite instances path <name>
+
+# Browse available templates
+./clawlite templates list
 ```
 
 ## Channel Configuration
@@ -144,6 +184,49 @@ See [OpenRouter Models](https://openrouter.ai/models) for available models.
 | `memory_update` | Append to long-term memory | `content` |
 | `user_update` | Update user profile | `content` |
 
+### Web
+
+| Tool | Description | Parameters |
+|------|-------------|------------|
+| `web_search` | Search the web (DuckDuckGo) | `query`, `max_results` |
+| `web_fetch` | Extract readable content from URL | `url`, `max_chars` |
+
+## Internal API
+
+ClawLite runs an internal HTTP API on port 8080 for cron jobs and external integrations.
+
+### Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/send` | Send message to user |
+| `POST` | `/api/prompt` | Run agent with prompt, send response |
+| `GET` | `/api/health` | Health check |
+
+### Usage
+
+```bash
+# Send a simple message
+curl -X POST http://localhost:8080/api/send \
+  -H "Content-Type: application/json" \
+  -d '{"user_id": "tg_123456", "message": "Hello!"}'
+
+# Run agent with prompt (LLM-powered response)
+curl -X POST http://localhost:8080/api/prompt \
+  -H "Content-Type: application/json" \
+  -d '{"user_id": "tg_123456", "prompt": "What time is it?"}'
+```
+
+### Helper Scripts for Cron
+
+```bash
+# Simple message reminder
+*/30 * * * * /path/to/clawlite-send tg_123456 "Time for a break!"
+
+# LLM-powered cron (agent generates response)
+0 8 * * * /path/to/clawlite-prompt tg_123456 "Good morning greeting"
+```
+
 ## Architecture
 
 ```
@@ -170,6 +253,101 @@ See [OpenRouter Models](https://openrouter.ai/models) for available models.
 |  +------------------------------------------------------------+  |
 +------------------------------------------------------------------+
 ```
+
+## Instance & Template System
+
+ClawLite supports creating multiple isolated instances from templates.
+
+### Template Resolution
+
+Templates are resolved in this order:
+
+| Pattern | Resolution |
+|---------|------------|
+| `./my-template` | Local directory |
+| `user/name` | `github.com/user/name-clawlite-tmpl` |
+| `name` | `github.com/$CLAWLITE_TEMPLATE_NAMESPACE/name-clawlite-tmpl` |
+
+Set your default namespace:
+```bash
+export CLAWLITE_TEMPLATE_NAMESPACE=myorg
+```
+
+### Creating an Instance
+
+```bash
+# From default namespace
+./clawlite instances new villa-cs my-villa
+
+# From specific user/org
+./clawlite instances new someuser/hotel-cs my-hotel
+
+# From local template
+./clawlite instances new ./my-custom-template my-bot
+```
+
+The wizard will prompt for required variables defined in the template.
+
+### Instance Lifecycle
+
+```bash
+# List all instances
+./clawlite instances list
+# NAME       STATUS    TEMPLATE    CREATED
+# my-villa   stopped   villa-cs    2026-02-21
+
+# Start/stop
+./clawlite instances start my-villa
+./clawlite instances stop my-villa
+
+# Get path for manual editing
+./clawlite instances path my-villa
+# /home/user/.clawlite/instances/my-villa
+
+# Remove (stops if running)
+./clawlite instances remove my-villa
+```
+
+### Creating Custom Templates
+
+Template structure:
+
+```
+my-template-clawlite-tmpl/
+├── template.yaml          # Variables & metadata
+├── .env.example           # Environment template
+├── workspace/
+│   ├── SOUL.md            # Agent persona (with {{VAR}} placeholders)
+│   ├── AGENTS.md          # Operating rules
+│   └── ...
+├── skills/                # Optional: bundled skills
+└── README.md
+```
+
+**template.yaml:**
+```yaml
+name: my-template
+version: "1.0"
+description: My custom agent template
+
+variables:
+  BOT_NAME:
+    description: Name of the bot
+    required: true
+    example: "MyBot"
+  
+  API_KEY:
+    description: API key for external service
+    required: false
+    secret: true
+
+files:
+  - workspace/SOUL.md
+  - workspace/AGENTS.md
+  - .env.example
+```
+
+Use `{{VARIABLE_NAME}}` placeholders in template files. The wizard replaces them during instance creation.
 
 ## Workspace Configuration
 

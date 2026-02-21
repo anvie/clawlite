@@ -24,7 +24,7 @@ services:
       - ./skills:/app/skills:ro
       - ./src:/app/src:ro
       - ./prompts:/app/prompts:ro
-      - ./config:/app/config:ro
+      - ./config.yaml:/app/config.yaml:ro
       # WhatsApp session persistence
       - ./data/whatsapp:/data/whatsapp:rw
     

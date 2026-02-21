@@ -23,8 +23,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy source code and templates
 COPY src/ ./src/
 COPY prompts/ ./prompts/
-COPY config/ ./config/
 COPY templates/ ./templates/
+
+# Copy example config (actual config.yaml should be mounted)
+COPY config-example.yaml ./config-example.yaml
 
 # Copy entrypoint and CLI scripts
 COPY docker-entrypoint.sh /usr/local/bin/

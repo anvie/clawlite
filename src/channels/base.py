@@ -44,6 +44,7 @@ class BaseChannel(ABC):
     """Abstract base class for messaging channels."""
     
     name: str = "base"
+    prefix: str = ""  # Channel prefix for user IDs (e.g., "tg", "wa")
     
     def __init__(self, agent_callback: AgentCallback):
         """
@@ -72,7 +73,7 @@ class BaseChannel(ABC):
         Send a message to a user.
         
         Args:
-            user_id: Target user ID
+            user_id: Target user ID (can be raw or prefixed)
             text: Message text
             **kwargs: Channel-specific options
             
@@ -81,18 +82,52 @@ class BaseChannel(ABC):
         """
         pass
     
+    def format_user_id(self, raw_id: str | int) -> str:
+        """
+        Format raw user ID with channel prefix.
+        
+        Args:
+            raw_id: Raw user ID from the channel (e.g., 123456, "628xxx")
+        
+        Returns:
+            Prefixed user ID (e.g., "tg_123456", "wa_628xxx")
+        """
+        raw_str = str(raw_id)
+        if self.prefix:
+            return f"{self.prefix}_{raw_str}"
+        return raw_str
+    
+    def strip_prefix(self, user_id: str) -> str:
+        """
+        Strip channel prefix from user ID.
+        
+        Args:
+            user_id: Prefixed user ID (e.g., "tg_123456")
+        
+        Returns:
+            Raw user ID (e.g., "123456")
+        """
+        if self.prefix and user_id.startswith(f"{self.prefix}_"):
+            return user_id[len(self.prefix) + 1:]
+        return user_id
+    
     def is_allowed(self, user_id: str) -> bool:
-        """Check if user is allowed to use the bot."""
-        allowed_env = os.getenv(f"{self.name.upper()}_ALLOWED_USERS", "")
-        if not allowed_env:
-            # Fall back to global ALLOWED_USERS
-            allowed_env = os.getenv("ALLOWED_USERS", "")
+        """
+        Check if user is allowed to use the bot.
+        Uses the centralized access control module.
         
-        if not allowed_env:
-            return True  # No restriction
+        Args:
+            user_id: Prefixed user ID (e.g., "tg_123456")
         
-        allowed = [u.strip() for u in allowed_env.split(",") if u.strip()]
-        return str(user_id) in allowed
+        Returns:
+            True if user is allowed
+        """
+        try:
+            from ..access import is_user_allowed
+            return is_user_allowed(user_id)
+        except ImportError:
+            # Fallback to old behavior if access module not available
+            return True
     
     async def process_message(
         self,
@@ -105,7 +140,7 @@ class BaseChannel(ABC):
         Process a message through the agent.
         
         Args:
-            user_id: User ID
+            user_id: Prefixed user ID
             text: Message text
             images: Optional list of base64 encoded images
             status_callback: Optional callback for status updates

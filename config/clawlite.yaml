@@ -1,6 +1,16 @@
 # ClawLite Configuration
 # Environment override: CLAWLITE_CONFIG=/path/to/config.yaml
 
+# Access control
+access:
+  # Allowed users (empty = all allowed, list = only those)
+  # Use prefixed IDs: tg_<id> for Telegram, wa_<id> for WhatsApp
+  allowed_users: []
+  
+  # Admin users (always allowed + bypass tool restrictions)
+  # Example: ["tg_123456", "wa_628123456"]
+  admins: []
+
 # LLM settings
 llm:
   provider: ollama

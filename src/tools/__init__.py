@@ -15,12 +15,30 @@ from .skill_tools import load_skill_tools
 _logger = logging.getLogger("clawlite.tools")
 
 
-def _filter_tools_by_config(tools: dict) -> dict:
+def _filter_tools_by_config(tools: dict, user_id: Optional[str] = None) -> dict:
     """Filter tools based on config/clawlite.yaml settings.
     
     If tools.allowed is empty or missing: all tools enabled
     If tools.allowed has items: only those tools enabled
+    Admin users bypass this filter and get all tools.
+    
+    Args:
+        tools: Dict of all available tools
+        user_id: Optional prefixed user ID for admin check
+    
+    Returns:
+        Filtered dict of tools
     """
+    # Check if user is admin - admins get all tools
+    if user_id:
+        try:
+            from ..access import is_admin
+            if is_admin(user_id):
+                _logger.debug(f"Admin user {user_id}: all tools enabled")
+                return tools
+        except ImportError:
+            pass
+    
     try:
         from ..config import get as config_get
     except ImportError:
@@ -67,14 +85,14 @@ except Exception as e:
     _logger.error(f"Failed to load skill tools: {e}")
     SKILL_TOOLS = {}
 
-# Apply config-based filtering
+# Apply config-based filtering (default, without user context)
 TOOLS = _filter_tools_by_config(_ALL_TOOLS)
 
 # User-scoped memory tools (instantiated per-user)
-_user_tools_cache: dict[int, dict[str, Tool]] = {}
+_user_tools_cache: dict[str, dict[str, Tool]] = {}
 
 
-def get_user_tools(user_id: int) -> dict[str, Tool]:
+def get_user_tools(user_id: str) -> dict[str, Tool]:
     """Get user-scoped tools (memory tools with user_id set)."""
     if user_id not in _user_tools_cache:
         # Create new instances with user_id set
@@ -100,22 +118,38 @@ def get_user_tools(user_id: int) -> dict[str, Tool]:
     return _user_tools_cache[user_id]
 
 
-def get_all_tools(user_id: Optional[int] = None) -> dict[str, Tool]:
-    """Get all tools (shared + user-scoped if user_id provided)."""
-    all_tools = dict(TOOLS)
+def get_all_tools(user_id: Optional[str] = None) -> dict[str, Tool]:
+    """Get all tools (shared + user-scoped if user_id provided).
+    
+    Admin users get all tools regardless of config filtering.
+    
+    Args:
+        user_id: Prefixed user ID (e.g., "tg_123456")
+    
+    Returns:
+        Dict of available tools
+    """
+    # Re-filter with user context (for admin bypass)
+    filtered_tools = _filter_tools_by_config(_ALL_TOOLS, user_id)
+    all_tools = dict(filtered_tools)
+    
     if user_id:
         all_tools.update(get_user_tools(user_id))
     return all_tools
 
 
-def get_tool(name: str, user_id: Optional[int] = None) -> Optional[Tool]:
+def get_tool(name: str, user_id: Optional[str] = None) -> Optional[Tool]:
     """Get a tool by name, with user-scoped tools if user_id provided."""
     all_tools = get_all_tools(user_id)
     return all_tools.get(name)
 
 
-def list_tools(user_id: Optional[int] = None) -> list[dict]:
-    """List all available tools with their descriptions."""
+def list_tools(user_id: Optional[str] = None) -> list[dict]:
+    """List all available tools with their descriptions.
+    
+    Args:
+        user_id: Prefixed user ID (e.g., "tg_123456")
+    """
     all_tools = get_all_tools(user_id)
     return [
         {
@@ -127,8 +161,12 @@ def list_tools(user_id: Optional[int] = None) -> list[dict]:
     ]
 
 
-def format_tools_for_prompt(user_id: Optional[int] = None) -> str:
-    """Format tools documentation for system prompt."""
+def format_tools_for_prompt(user_id: Optional[str] = None) -> str:
+    """Format tools documentation for system prompt.
+    
+    Args:
+        user_id: Prefixed user ID (e.g., "tg_123456")
+    """
     all_tools = get_all_tools(user_id)
     lines = ["Available tools:"]
     for name, tool in all_tools.items():

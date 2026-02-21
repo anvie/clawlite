@@ -56,6 +56,7 @@ class WhatsAppChannel(BaseChannel):
     """WhatsApp messaging channel using neonize (sync client in thread)."""
     
     name = "whatsapp"
+    prefix = "wa"  # User IDs will be prefixed as wa_<id>
     
     def __init__(self, agent_callback):
         if not NEONIZE_AVAILABLE:
@@ -316,26 +317,29 @@ class WhatsAppChannel(BaseChannel):
     async def _handle_message_event(self, ev: Any) -> None:
         """Handle incoming WhatsApp message."""
         try:
-            sender_id = self._extract_sender_id(ev)
-            chat_id = self._extract_chat_id(ev)
+            raw_sender_id = self._extract_sender_id(ev)
+            raw_chat_id = self._extract_chat_id(ev)
             text = self._extract_text(ev)
             
-            if sender_id == "unknown" or not text:
+            if raw_sender_id == "unknown" or not text:
                 return
             
-            if not self.is_allowed(sender_id):
-                self.logger.debug(f"Ignoring unauthorized: {sender_id}")
+            # Use prefixed user ID for access control and storage
+            raw_user_id = raw_chat_id if raw_chat_id != "unknown" else raw_sender_id
+            user_id = self.format_user_id(raw_user_id)
+            
+            if not self.is_allowed(user_id):
+                self.logger.debug(f"Ignoring unauthorized: {user_id}")
                 return
             
-            user_id = chat_id if chat_id != "unknown" else sender_id
             self.logger.info(f"📩 Processing [{user_id}]: {text[:50]}...")
             
             # Get conversation history
             if user_id not in self.conversations:
                 self.conversations[user_id] = []
             
-            # Show typing indicator
-            await self.send_typing(user_id, True)
+            # Show typing indicator (use raw ID for WhatsApp API)
+            await self.send_typing(raw_user_id, True)
             
             try:
                 from ..agent import run_agent
@@ -345,7 +349,7 @@ class WhatsAppChannel(BaseChannel):
                 response, new_history = await run_agent(
                     text,
                     self.conversations[user_id],
-                    user_id=user_id,
+                    user_id=user_id,  # Pass prefixed user_id
                     status_callback=noop_status,
                     images=None,
                 )
@@ -361,18 +365,18 @@ class WhatsAppChannel(BaseChannel):
                 )
                 final_text = final_text.strip()
                 
-                # Stop typing indicator
-                await self.send_typing(user_id, False)
+                # Stop typing indicator (use raw ID for WhatsApp API)
+                await self.send_typing(raw_user_id, False)
                 
                 if final_text:
-                    await self._send_long_message(user_id, final_text)
+                    await self._send_long_message(raw_user_id, final_text)
                 else:
-                    await self.send_message(user_id, "✅ Done!")
+                    await self.send_message(raw_user_id, "✅ Done!")
                     
             except Exception as e:
-                await self.send_typing(user_id, False)
+                await self.send_typing(raw_user_id, False)
                 self.logger.error(f"Agent error: {e}")
-                await self.send_message(user_id, f"❌ Error: {str(e)[:500]}")
+                await self.send_message(raw_user_id, f"❌ Error: {str(e)[:500]}")
                 
         except Exception as e:
             self.logger.error(f"Message handler error: {e}")

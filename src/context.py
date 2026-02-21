@@ -8,12 +8,12 @@ from typing import Optional
 WORKSPACE_DIR = os.environ.get("WORKSPACE_DIR", "/workspace")
 
 
-def get_user_dir(user_id: int) -> Path:
+def get_user_dir(user_id: str) -> Path:
     """Get the user's directory path."""
     return Path(WORKSPACE_DIR) / "users" / str(user_id)
 
 
-def ensure_user_dir(user_id: int) -> Path:
+def ensure_user_dir(user_id: str) -> Path:
     """Create user directory structure if it doesn't exist."""
     user_dir = get_user_dir(user_id)
     memory_dir = user_dir / "memory"
@@ -70,7 +70,7 @@ def load_shared_context() -> str:
     return "\n\n---\n\n".join(parts)
 
 
-def load_user_context(user_id: int) -> str:
+def load_user_context(user_id: str) -> str:
     """Load user-specific context files."""
     user_dir = ensure_user_dir(user_id)
     parts = []
@@ -99,7 +99,7 @@ def load_user_context(user_id: int) -> str:
     return "\n\n---\n\n".join(parts)
 
 
-def load_full_context(user_id: int) -> str:
+def load_full_context(user_id: str) -> str:
     """Load complete context for a user (shared + user-specific)."""
     shared = load_shared_context()
     user = load_user_context(user_id)
@@ -113,14 +113,14 @@ def load_full_context(user_id: int) -> str:
     return "\n\n===\n\n".join(parts)
 
 
-def get_today_memory_path(user_id: int) -> Path:
+def get_today_memory_path(user_id: str) -> Path:
     """Get path to today's memory file for a user."""
     user_dir = ensure_user_dir(user_id)
     today = date.today().isoformat()
     return user_dir / "memory" / f"{today}.md"
 
 
-def append_to_daily_memory(user_id: int, content: str) -> bool:
+def append_to_daily_memory(user_id: str, content: str) -> bool:
     """Append content to today's memory file."""
     try:
         path = get_today_memory_path(user_id)

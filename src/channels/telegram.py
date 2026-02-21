@@ -30,12 +30,13 @@ class TelegramChannel(BaseChannel):
     """Telegram messaging channel."""
     
     name = "telegram"
+    prefix = "tg"  # User IDs will be prefixed as tg_<id>
     
     def __init__(self, agent_callback):
         super().__init__(agent_callback)
         self.token = os.getenv("TELEGRAM_TOKEN")
         self.application: Optional[Application] = None
-        self.conversations: dict[int, list[dict]] = {}
+        self.conversations: dict[str, list[dict]] = {}  # Now keyed by prefixed user_id
     
     async def start(self) -> None:
         """Start the Telegram bot."""
@@ -96,11 +97,13 @@ class TelegramChannel(BaseChannel):
     async def _cmd_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle /start command."""
         user = update.effective_user
-        if not self.is_allowed(str(user.id)):
+        user_id = self.format_user_id(user.id)
+        
+        if not self.is_allowed(user_id):
             await update.message.reply_text("⛔ Not authorized.")
             return
         
-        self.logger.info(f"👋 /start from {user.id} ({user.username})")
+        self.logger.info(f"👋 /start from {user_id} ({user.username})")
         await update.message.reply_text(
             f"👋 Halo {user.first_name}!\n\n"
             f"Saya *ClawLite* — AI assistant ringan dengan Ollama.\n\n"
@@ -118,8 +121,8 @@ class TelegramChannel(BaseChannel):
     
     async def _cmd_clear(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle /clear command."""
-        user_id = update.effective_user.id
-        if not self.is_allowed(str(user_id)):
+        user_id = self.format_user_id(update.effective_user.id)
+        if not self.is_allowed(user_id):
             return
         self.conversations[user_id] = []
         self.logger.info(f"🗑️ Cleared history for {user_id}")
@@ -127,12 +130,12 @@ class TelegramChannel(BaseChannel):
     
     async def _cmd_tools(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle /tools command."""
-        user_id = update.effective_user.id
-        if not self.is_allowed(str(user_id)):
+        user_id = self.format_user_id(update.effective_user.id)
+        if not self.is_allowed(user_id):
             return
         
         from ..tools import list_tools
-        tools = list_tools(user_id=str(user_id))
+        tools = list_tools(user_id=user_id)
         
         text = "🔧 *Available Tools:*\n\n"
         for t in tools:
@@ -142,7 +145,8 @@ class TelegramChannel(BaseChannel):
     
     async def _cmd_workspace(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle /workspace command."""
-        if not self.is_allowed(str(update.effective_user.id)):
+        user_id = self.format_user_id(update.effective_user.id)
+        if not self.is_allowed(user_id):
             return
         
         from ..tools import get_tool
@@ -166,7 +170,9 @@ class TelegramChannel(BaseChannel):
     ) -> None:
         """Handle text messages."""
         user = update.effective_user
-        if not self.is_allowed(str(user.id)):
+        user_id = self.format_user_id(user.id)
+        
+        if not self.is_allowed(user_id):
             await update.message.reply_text("⛔ Not authorized.")
             return
         
@@ -179,7 +185,7 @@ class TelegramChannel(BaseChannel):
             await update.message.reply_text("❓ No message received.")
             return
         
-        self.logger.info(f"📩 [{user.id}]: {user_message[:100]}{'(+image)' if images else ''}...")
+        self.logger.info(f"📩 [{user_id}]: {user_message[:100]}{'(+image)' if images else ''}...")
         
         # Send initial status
         status_msg = await update.message.reply_text("🧠 _Thinking..._", parse_mode="Markdown")
@@ -196,8 +202,8 @@ class TelegramChannel(BaseChannel):
                     pass
         
         # Get conversation history
-        if user.id not in self.conversations:
-            self.conversations[user.id] = []
+        if user_id not in self.conversations:
+            self.conversations[user_id] = []
         
         try:
             # Import agent here to avoid circular imports
@@ -205,13 +211,13 @@ class TelegramChannel(BaseChannel):
             
             response, new_history = await run_agent(
                 user_message,
-                self.conversations[user.id],
-                user_id=user.id,
+                self.conversations[user_id],
+                user_id=user_id,
                 status_callback=update_status,
                 images=images,
             )
             
-            self.conversations[user.id] = new_history
+            self.conversations[user_id] = new_history
             
             # Clean up response
             import re
@@ -231,7 +237,7 @@ class TelegramChannel(BaseChannel):
             await self._send_chunked(update, status_msg, final_text)
             
         except Exception as e:
-            self.logger.error(f"Error for user {user.id}: {e}")
+            self.logger.error(f"Error for user {user_id}: {e}")
             await status_msg.edit_text(f"❌ Error: {str(e)[:500]}")
     
     async def _send_chunked(
@@ -275,7 +281,9 @@ class TelegramChannel(BaseChannel):
     async def _handle_photo(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle photo messages."""
         user = update.effective_user
-        if not self.is_allowed(str(user.id)):
+        user_id = self.format_user_id(user.id)
+        
+        if not self.is_allowed(user_id):
             await update.message.reply_text("⛔ Not authorized.")
             return
         
@@ -284,9 +292,9 @@ class TelegramChannel(BaseChannel):
         try:
             file_obj = await context.bot.get_file(photo.file_id)
             filename = f"photo_{photo.file_unique_id}.jpg"
-            relative_path = await self._download_file(file_obj, user.id, filename)
+            relative_path = await self._download_file(file_obj, user_id, filename)
             
-            self.logger.info(f"📷 Photo from [{user.id}] saved to: {relative_path}")
+            self.logger.info(f"📷 Photo from [{user_id}] saved to: {relative_path}")
             
             # Read as base64
             full_path = os.path.join(WORKSPACE, relative_path)
@@ -297,13 +305,15 @@ class TelegramChannel(BaseChannel):
             await self._handle_message(update, context, file_context=file_context, images=[image_base64])
             
         except Exception as e:
-            self.logger.error(f"Error handling photo from {user.id}: {e}")
+            self.logger.error(f"Error handling photo from {user_id}: {e}")
             await update.message.reply_text(f"❌ Failed to process image: {str(e)[:200]}")
     
     async def _handle_document(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle document messages."""
         user = update.effective_user
-        if not self.is_allowed(str(user.id)):
+        user_id = self.format_user_id(user.id)
+        
+        if not self.is_allowed(user_id):
             await update.message.reply_text("⛔ Not authorized.")
             return
         
@@ -316,9 +326,9 @@ class TelegramChannel(BaseChannel):
         try:
             file_obj = await context.bot.get_file(doc.file_id)
             filename = doc.file_name or f"file_{doc.file_unique_id}"
-            relative_path = await self._download_file(file_obj, user.id, filename)
+            relative_path = await self._download_file(file_obj, user_id, filename)
             
-            self.logger.info(f"📎 Document from [{user.id}]: {relative_path} ({doc.mime_type})")
+            self.logger.info(f"📎 Document from [{user_id}]: {relative_path} ({doc.mime_type})")
             
             # Check if image
             _, ext = os.path.splitext(filename.lower())
@@ -342,5 +352,5 @@ class TelegramChannel(BaseChannel):
             await self._handle_message(update, context, file_context=file_context, images=images)
             
         except Exception as e:
-            self.logger.error(f"Error handling document from {user.id}: {e}")
+            self.logger.error(f"Error handling document from {user_id}: {e}")
             await update.message.reply_text(f"❌ Failed to process file: {str(e)[:200]}")

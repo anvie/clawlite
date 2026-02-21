@@ -10,8 +10,12 @@ from . import Tool, ToolResult
 WORKSPACE_DIR = os.environ.get("WORKSPACE_DIR", "/workspace")
 
 
-def get_user_dir(user_id: int) -> Path:
-    """Get the user's directory path."""
+def get_user_dir(user_id: str) -> Path:
+    """Get the user's directory path.
+    
+    Args:
+        user_id: Prefixed user ID (e.g., "tg_123456", "wa_628xxx")
+    """
     return Path(WORKSPACE_DIR) / "users" / str(user_id)
 
 
@@ -29,7 +33,7 @@ class MemoryLogTool(Tool):
     }
     
     # Will be set per-request
-    user_id: Optional[int] = None
+    user_id: Optional[str] = None
     
     async def execute(self, content: str) -> ToolResult:
         if not self.user_id:
@@ -76,7 +80,7 @@ class MemoryReadTool(Tool):
         }
     }
     
-    user_id: Optional[int] = None
+    user_id: Optional[str] = None
     
     async def execute(self, date: Optional[str] = None) -> ToolResult:
         if not self.user_id:
@@ -114,7 +118,7 @@ class MemoryUpdateTool(Tool):
         }
     }
     
-    user_id: Optional[int] = None
+    user_id: Optional[str] = None
     
     async def execute(self, content: str) -> ToolResult:
         if not self.user_id:
@@ -153,7 +157,7 @@ class UserUpdateTool(Tool):
         }
     }
     
-    user_id: Optional[int] = None
+    user_id: Optional[str] = None
     
     async def execute(self, content: str) -> ToolResult:
         if not self.user_id:

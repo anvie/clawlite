@@ -147,7 +147,7 @@ async def stream_with_retry(prompt: str, images: list = None, max_retries: int =
 async def run_agent(
     user_message: str,
     history: list[dict],
-    user_id: Optional[int] = None,
+    user_id: Optional[str] = None,
     status_callback: Optional[Callable[[str], Awaitable[None]]] = None,
     max_iterations: int = 10,
     images: list[str] = None,  # List of base64 encoded images
@@ -158,7 +158,7 @@ async def run_agent(
     Args:
         user_message: The user's input
         history: Conversation history
-        user_id: Telegram user ID (for user-scoped context and tools)
+        user_id: Prefixed user ID (e.g., "tg_123456", "wa_628xxx")
         status_callback: Async callback for status updates
         max_iterations: Maximum tool call iterations
         images: List of base64 encoded images for multimodal input

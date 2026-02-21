@@ -3,7 +3,29 @@
 import os
 import asyncio
 import re
+import logging
 from .base import Tool, ToolResult, WORKSPACE
+
+logger = logging.getLogger("clawlite.tools.cron")
+
+
+def validate_cron_schedule(schedule: str) -> tuple[bool, str]:
+    """Validate cron expression using croniter."""
+    try:
+        from croniter import croniter
+        # croniter validates by trying to create an iterator
+        croniter(schedule)
+        return True, ""
+    except ImportError:
+        # Fallback to basic validation if croniter not installed
+        parts = schedule.split()
+        if len(parts) != 5:
+            return False, "Schedule must have 5 parts: minute hour day month weekday"
+        return True, ""
+    except (ValueError, KeyError) as e:
+        return False, f"Invalid cron expression: {e}"
+    except Exception as e:
+        return False, f"Cron validation error: {e}"
 
 
 class ListCronTool(Tool):
@@ -24,15 +46,22 @@ class ListCronTool(Tool):
             errors = stderr.decode("utf-8", errors="replace")
             
             if "no crontab" in errors.lower():
+                logger.debug("No crontab found for current user")
                 return ToolResult(True, "No cron jobs configured")
             
             if proc.returncode != 0:
-                return ToolResult(False, "", errors[:500])
+                logger.warning(f"crontab -l failed: {errors[:200]}")
+                return ToolResult(False, "", f"Failed to list cron jobs: {errors[:500]}")
             
+            logger.debug(f"Listed cron jobs: {len(output.splitlines())} lines")
             return ToolResult(True, output or "No cron jobs configured")
             
+        except asyncio.TimeoutError:
+            logger.error("crontab -l timed out")
+            return ToolResult(False, "", "Timed out listing cron jobs")
         except Exception as e:
-            return ToolResult(False, "", str(e))
+            logger.exception("Error listing cron jobs")
+            return ToolResult(False, "", f"Error listing cron jobs: {str(e)}")
 
 
 class AddCronTool(Tool):
@@ -55,10 +84,10 @@ class AddCronTool(Tool):
             if not schedule or not command:
                 return ToolResult(False, "", "Both schedule and command required")
             
-            # Validate schedule format (basic check)
-            parts = schedule.split()
-            if len(parts) != 5:
-                return ToolResult(False, "", "Schedule must have 5 parts: minute hour day month weekday")
+            # Validate schedule format using croniter
+            valid, error = validate_cron_schedule(schedule)
+            if not valid:
+                return ToolResult(False, "", error)
             
             # Block dangerous commands
             dangerous = ["rm -rf", "sudo", "chmod 777", "> /dev/sd", "mkfs", "dd if="]
@@ -103,12 +132,18 @@ class AddCronTool(Tool):
             
             if proc.returncode != 0:
                 errors = stderr.decode("utf-8", errors="replace")
+                logger.warning(f"Failed to add cron job: {errors[:200]}")
                 return ToolResult(False, "", f"Failed to add cron: {errors[:500]}")
             
+            logger.info(f"Added cron job: {schedule} {command[:50]}...")
             return ToolResult(True, f"Added cron job: {schedule} {command}")
             
+        except asyncio.TimeoutError:
+            logger.error("crontab command timed out")
+            return ToolResult(False, "", "Timed out adding cron job")
         except Exception as e:
-            return ToolResult(False, "", str(e))
+            logger.exception("Error adding cron job")
+            return ToolResult(False, "", f"Error adding cron job: {str(e)}")
 
 
 class RemoveCronTool(Tool):
@@ -175,7 +210,12 @@ class RemoveCronTool(Tool):
                 )
                 await asyncio.wait_for(proc.communicate(), timeout=10)
             
+            logger.info(f"Removed {len(removed)} cron entry(s)")
             return ToolResult(True, f"Removed {len(removed)} cron entry(s):\n" + "\n".join(removed))
             
+        except asyncio.TimeoutError:
+            logger.error("crontab command timed out")
+            return ToolResult(False, "", "Timed out removing cron job")
         except Exception as e:
-            return ToolResult(False, "", str(e))
+            logger.exception("Error removing cron job")
+            return ToolResult(False, "", f"Error removing cron job: {str(e)}")

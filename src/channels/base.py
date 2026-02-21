@@ -148,14 +148,6 @@ class BaseChannel(ABC):
         Returns:
             Agent response text
         """
-        # First-user-as-admin: attempt to claim ownership
-        try:
-            from ..access import claim_ownership
-            if claim_ownership(user_id):
-                self.logger.info(f"First user {user_id} claimed ownership (admin)")
-        except Exception as e:
-            self.logger.warning(f"Failed to check ownership: {e}")
-        
         if not self.is_allowed(user_id):
             return "⛔ Not authorized."
         

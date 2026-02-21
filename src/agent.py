@@ -179,6 +179,15 @@ async def run_agent(
     start_time = time.time()
     logger.info(f"Agent run started for user {user_id}, message length: {len(user_message)}")
     
+    # First-user-as-admin: claim ownership on first message
+    if user_id:
+        try:
+            from .access import claim_ownership
+            if claim_ownership(user_id):
+                logger.info(f"First user {user_id} claimed ownership (admin)")
+        except Exception as e:
+            logger.warning(f"Failed to claim ownership: {e}")
+    
     # Load persisted conversation history if none provided
     if not history and user_id:
         history = load_conversation_history(user_id)

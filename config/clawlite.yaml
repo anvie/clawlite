@@ -1,0 +1,54 @@
+# ClawLite Configuration
+# Environment override: CLAWLITE_CONFIG=/path/to/config.yaml
+
+# LLM settings
+llm:
+  provider: ollama
+  model: llama3.2:3b
+  host: http://localhost:11434
+  timeout: 60
+
+# Agent behavior
+agent:
+  max_iterations: 10
+  tool_timeout: 30        # seconds per tool execution
+  total_timeout: 300      # 5 min max per conversation turn
+  retry_attempts: 3       # LLM retry attempts
+
+# Tool settings
+tools:
+  # Mode: "allowlist" or "blocklist"
+  # - blocklist: all tools enabled EXCEPT those in 'disabled'
+  # - allowlist: only tools in 'enabled' are available
+  mode: blocklist
+  
+  # For blocklist mode: disable specific tools
+  disabled: []
+  # disabled:
+  #   - exec
+  #   - run_bash
+  #   - run_python
+  
+  # For allowlist mode: enable only specific tools
+  # enabled:
+  #   - read_file
+  #   - write_file
+  #   - web_search
+  
+  # Per-tool configuration
+  options:
+    web_search:
+      max_results: 5
+    web_fetch:
+      max_chars: 10000
+
+# Channel settings
+channels:
+  telegram:
+    enabled: true
+  whatsapp:
+    enabled: false
+
+# Logging
+logging:
+  level: INFO  # DEBUG | INFO | WARNING | ERROR

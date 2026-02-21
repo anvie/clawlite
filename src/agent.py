@@ -12,17 +12,18 @@ from .llm import stream_generate
 from .tools import get_tool, format_tools_for_prompt, SKILL_TOOLS
 from .translation import translate_to_english, translate_to_indonesian, TRANSLATION_ENABLED
 from .context import load_full_context, ensure_user_dir, is_bot_unconfigured
+from .config import get as config_get
 
 logger = logging.getLogger("clawlite.agent")
 
 # Load system prompt
 PROMPTS_DIR = os.path.join(os.path.dirname(__file__), "..", "prompts")
 
-# Configuration
-TOOL_TIMEOUT = 30  # seconds per tool execution
-LLM_MAX_RETRIES = 3  # retry attempts for LLM errors
+# Configuration (from config/clawlite.yaml with defaults)
+TOOL_TIMEOUT = config_get('agent.tool_timeout', 30)
+LLM_MAX_RETRIES = config_get('agent.retry_attempts', 3)
 LLM_RETRY_DELAY = 2  # base delay for exponential backoff
-TOTAL_TIME_LIMIT = 300  # 5 minutes max per conversation turn
+TOTAL_TIME_LIMIT = config_get('agent.total_timeout', 300)
 
 
 def format_skill_prompts() -> str:

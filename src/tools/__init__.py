@@ -1,6 +1,8 @@
 """ClawLite Tools - Sandboxed file and shell operations."""
 
+import logging
 from typing import Optional
+
 from .base import Tool, ToolResult
 from .file_ops import ReadFileTool, WriteFileTool, ListDirTool
 from .shell import ExecTool, RunBashTool, RunPythonTool, KillProcessTool, ListProcessesTool
@@ -10,8 +12,38 @@ from .memory import MemoryLogTool, MemoryReadTool, MemoryUpdateTool, UserUpdateT
 from .web import WebSearchTool, WebFetchTool
 from .skill_tools import load_skill_tools
 
+_logger = logging.getLogger("clawlite.tools")
+
+
+def _filter_tools_by_config(tools: dict) -> dict:
+    """Filter tools based on config/clawlite.yaml settings."""
+    try:
+        from ..config import get as config_get
+    except ImportError:
+        return tools
+    
+    mode = config_get('tools.mode', 'blocklist')
+    
+    if mode == 'allowlist':
+        enabled = config_get('tools.enabled', [])
+        if enabled:
+            filtered = {k: v for k, v in tools.items() if k in enabled}
+            disabled_count = len(tools) - len(filtered)
+            if disabled_count > 0:
+                _logger.info(f"Allowlist mode: {len(filtered)} tools enabled, {disabled_count} disabled")
+            return filtered
+    else:  # blocklist (default)
+        disabled = config_get('tools.disabled', [])
+        if disabled:
+            filtered = {k: v for k, v in tools.items() if k not in disabled}
+            _logger.info(f"Blocklist mode: disabled {len(disabled)} tools: {disabled}")
+            return filtered
+    
+    return tools
+
+
 # Registry of all available tools (non-user-scoped)
-TOOLS = {
+_ALL_TOOLS = {
     "read_file": ReadFileTool(),
     "write_file": WriteFileTool(),
     "list_dir": ListDirTool(),
@@ -30,17 +62,17 @@ TOOLS = {
 }
 
 # Load and register skill-based tools
-import logging
-_logger = logging.getLogger("clawlite.tools")
-
 try:
     SKILL_TOOLS = load_skill_tools()
-    TOOLS.update(SKILL_TOOLS)
+    _ALL_TOOLS.update(SKILL_TOOLS)
     if SKILL_TOOLS:
         _logger.info(f"Registered {len(SKILL_TOOLS)} skill tool(s): {list(SKILL_TOOLS.keys())}")
 except Exception as e:
     _logger.error(f"Failed to load skill tools: {e}")
     SKILL_TOOLS = {}
+
+# Apply config-based filtering
+TOOLS = _filter_tools_by_config(_ALL_TOOLS)
 
 # User-scoped memory tools (instantiated per-user)
 _user_tools_cache: dict[int, dict[str, Tool]] = {}

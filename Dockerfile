@@ -8,6 +8,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     procps \
     cron \
     libmagic1 \
+    gosu \
     && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user
@@ -35,8 +36,8 @@ RUN mkdir -p /data/whatsapp && chown -R clawlite:clawlite /data
 # Set ownership
 RUN chown -R clawlite:clawlite /app
 
-# Switch to non-root user
-USER clawlite
+# NOTE: Not switching to non-root here - entrypoint handles it
+# This allows starting cron daemon before dropping privileges
 
 # Volumes
 VOLUME ["/workspace", "/data/whatsapp"]

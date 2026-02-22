@@ -13,10 +13,32 @@ access:
 
 # LLM settings
 llm:
+  # Provider: ollama | openrouter | anthropic
   provider: ollama
+  
+  # Ollama settings
   model: llama3.2:3b
   host: http://localhost:11434
   timeout: 60
+  
+  # OpenRouter settings (if provider: openrouter)
+  # openrouter_model: google/gemini-2.0-flash-001
+  # openrouter_api_key: ${OPENROUTER_API_KEY}
+  
+  # Anthropic settings (if provider: anthropic)
+  # anthropic_model: claude-sonnet-4-20250514
+  # 
+  # Auth option 1: API Key (from Anthropic Console)
+  # anthropic_api_key: ${ANTHROPIC_API_KEY}
+  # 
+  # Auth option 2: OAuth Token (from `claude setup-token`)
+  # anthropic_auth_token: ${ANTHROPIC_AUTH_TOKEN}
+  # 
+  # If both set, OAuth token takes precedence.
+  # 
+  # Extended thinking (Claude Sonnet/Opus feature)
+  # anthropic_extended_thinking: true  # Enable by default
+  # anthropic_thinking_budget: 10000   # Max thinking tokens
 
 # Agent behavior
 agent:

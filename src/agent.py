@@ -7,10 +7,17 @@ import time
 import asyncio
 import logging
 from dataclasses import dataclass
-from typing import Optional, Callable, Awaitable
+from typing import Optional, Callable, Awaitable, List, Dict, Any
 
-from .llm import stream_generate
-from .tools import get_tool, format_tools_for_prompt, SKILL_TOOLS
+from .llm import (
+    stream_generate, 
+    supports_native_tools, 
+    stream_with_tools,
+    convert_tools_to_anthropic_format,
+    build_tool_result_message,
+    ToolResult as LLMToolResult,
+)
+from .tools import get_tool, format_tools_for_prompt, list_tools, SKILL_TOOLS
 from .translation import translate_to_english, translate_to_indonesian, TRANSLATION_ENABLED
 from .context import load_full_context, ensure_user_dir, is_bot_unconfigured, load_conversation_history
 from .config import get as config_get
@@ -154,6 +161,253 @@ class AgentResult:
     file_data: Optional[dict] = None  # For file responses from skills
 
 
+async def _run_agent_native_tools(
+    user_message: str,
+    history: list[dict],
+    system_prompt: str,
+    user_id: Optional[str] = None,
+    status_callback: Optional[Callable[[str], Awaitable[None]]] = None,
+    max_iterations: int = 10,
+    images: list[str] = None,
+    start_time: float = None,
+) -> AgentResult:
+    """
+    Run agent loop with native tool calling (Anthropic Claude).
+    
+    Uses structured tool_use/tool_result content blocks.
+    """
+    start_time = start_time or time.time()
+    logger.info(f"Running agent with native tools for user {user_id}")
+    
+    # Get available tools and convert to Anthropic format
+    available_tools = list_tools(user_id)
+    anthropic_tools = convert_tools_to_anthropic_format(available_tools)
+    logger.debug(f"Converted {len(anthropic_tools)} tools to Anthropic format")
+    
+    # Build initial messages from history
+    messages: List[Dict[str, Any]] = []
+    for msg in history[-10:]:
+        messages.append({
+            "role": msg["role"],
+            "content": msg["content"],
+        })
+    
+    # Add current user message (with images if provided)
+    if images:
+        content = []
+        for img_base64 in images:
+            # Detect MIME type
+            if img_base64.startswith("/9j/"):
+                mime = "image/jpeg"
+            elif img_base64.startswith("iVBOR"):
+                mime = "image/png"
+            else:
+                mime = "image/jpeg"
+            content.append({
+                "type": "image",
+                "source": {"type": "base64", "media_type": mime, "data": img_base64}
+            })
+        content.append({"type": "text", "text": user_message})
+        messages.append({"role": "user", "content": content})
+    else:
+        messages.append({"role": "user", "content": user_message})
+    
+    iterations = 0
+    accumulated_text = ""
+    thinking_buffer = ""
+    pending_file_data = None
+    last_tool_result = None
+    
+    while iterations < max_iterations:
+        iterations += 1
+        
+        # Check total time limit
+        elapsed = time.time() - start_time
+        if elapsed > TOTAL_TIME_LIMIT:
+            logger.warning(f"Agent exceeded time limit ({TOTAL_TIME_LIMIT}s), aborting")
+            if accumulated_text:
+                accumulated_text += "\n\n[Response truncated: time limit exceeded]"
+            else:
+                accumulated_text = "I'm sorry, the request took too long to process."
+            break
+        
+        logger.debug(f"Native tools iteration {iterations}/{max_iterations}")
+        
+        # Collect tool calls and text from this turn
+        turn_text = ""
+        turn_tool_calls: List[Any] = []  # List of ToolCall
+        last_update = 0
+        
+        try:
+            async for event in stream_with_tools(
+                messages=messages,
+                system=system_prompt,
+                tools=anthropic_tools,
+            ):
+                event_type = event.get("type")
+                
+                if event_type == "text":
+                    text = event.get("text", "")
+                    turn_text += text
+                    
+                    # Status update
+                    current_time = asyncio.get_event_loop().time()
+                    if status_callback and (current_time - last_update > 1.0):
+                        try:
+                            if turn_text:
+                                await status_callback(f"{turn_text[:1500]}▌")
+                        except Exception as e:
+                            logger.warning(f"Status callback failed: {e}")
+                        last_update = current_time
+                
+                elif event_type == "thinking":
+                    thinking_buffer = event.get("thinking", "")
+                    
+                    # Status update for thinking
+                    current_time = asyncio.get_event_loop().time()
+                    if status_callback and (current_time - last_update > 1.0):
+                        try:
+                            preview = thinking_buffer[-400:] if len(thinking_buffer) > 400 else thinking_buffer
+                            await status_callback(f"🧠 _Thinking..._\n```\n{preview}▌\n```")
+                        except Exception as e:
+                            logger.warning(f"Status callback failed: {e}")
+                        last_update = current_time
+                
+                elif event_type == "tool_use":
+                    tool_call = event.get("tool_call")
+                    if tool_call:
+                        turn_tool_calls.append(tool_call)
+                        logger.info(f"Tool call: {tool_call.name} with args: {list(tool_call.arguments.keys())}")
+                        
+                        if status_callback:
+                            try:
+                                await status_callback(f"🔧 Calling: `{tool_call.name}`\n```json\n{json.dumps(tool_call.arguments, indent=2)}\n```")
+                            except Exception as e:
+                                logger.warning(f"Status callback failed: {e}")
+                
+                elif event_type == "done":
+                    stop_reason = event.get("stop_reason", "")
+                    logger.debug(f"Stream done, stop_reason: {stop_reason}")
+                    break
+        
+        except Exception as e:
+            logger.error(f"LLM streaming failed: {e}")
+            error_msg = sanitize_error(e)
+            if accumulated_text:
+                accumulated_text += f"\n\n❌ {error_msg}"
+            else:
+                accumulated_text = f"❌ {error_msg}"
+            break
+        
+        # Accumulate text
+        accumulated_text += turn_text
+        
+        # If no tool calls, we're done
+        if not turn_tool_calls:
+            logger.debug("No tool calls, finishing agent loop")
+            break
+        
+        # Build assistant message with text + tool_use blocks
+        assistant_content = []
+        if turn_text:
+            assistant_content.append({"type": "text", "text": turn_text})
+        
+        for tc in turn_tool_calls:
+            assistant_content.append({
+                "type": "tool_use",
+                "id": tc.id,
+                "name": tc.name,
+                "input": tc.arguments,
+            })
+        
+        messages.append({"role": "assistant", "content": assistant_content})
+        
+        # Execute tools and collect results
+        tool_results: List[LLMToolResult] = []
+        
+        for tc in turn_tool_calls:
+            tool = get_tool(tc.name, user_id=user_id)
+            
+            if tool:
+                result = await execute_tool_with_timeout(tool, tc.arguments)
+                
+                # Check for file data
+                if result.file_data:
+                    pending_file_data = result.file_data
+                    result_text = f"File ready: {result.file_data.get('filename', 'file')}"
+                    logger.info(f"Tool {tc.name} returned file: {result.file_data.get('filename')}")
+                elif result.success:
+                    result_text = result.output[:4000]  # Anthropic allows larger results
+                    logger.info(f"Tool {tc.name} succeeded, output length: {len(result.output)}")
+                else:
+                    result_text = f"Error: {result.error}"
+                    logger.warning(f"Tool {tc.name} failed: {result.error}")
+                
+                last_tool_result = {"tool": tc.name, "result": result_text, "success": result.success}
+                
+                tool_results.append(LLMToolResult(
+                    tool_use_id=tc.id,
+                    content=result_text,
+                    is_error=not result.success,
+                ))
+            else:
+                logger.warning(f"Unknown tool: {tc.name}")
+                tool_results.append(LLMToolResult(
+                    tool_use_id=tc.id,
+                    content=f"Unknown tool: {tc.name}",
+                    is_error=True,
+                ))
+        
+        # Add tool results as user message
+        messages.append(build_tool_result_message(tool_results))
+    
+    # Finalize response
+    final_response = accumulated_text.strip()
+    
+    # Fallback if empty
+    if not final_response and last_tool_result:
+        logger.info("Response was empty, falling back to last tool result")
+        if last_tool_result["success"]:
+            final_response = f"Result:\n```\n{last_tool_result['result']}\n```"
+        else:
+            final_response = f"Error: {last_tool_result['result']}"
+    
+    # Translate if enabled
+    if TRANSLATION_ENABLED:
+        try:
+            final_response = await translate_to_indonesian(final_response)
+        except Exception as e:
+            logger.warning(f"Response translation failed: {e}")
+    
+    # Update history
+    new_history = history + [
+        {"role": "user", "content": user_message},
+        {"role": "assistant", "content": final_response},
+    ]
+    
+    if len(new_history) > 20:
+        new_history = new_history[-20:]
+    
+    # Save conversation
+    if user_id:
+        try:
+            from .conversation import append_message, is_enabled
+            if is_enabled():
+                append_message(user_id, "user", user_message)
+                append_message(user_id, "assistant", final_response)
+        except Exception as e:
+            logger.warning(f"Failed to save conversation: {e}")
+    
+    elapsed = time.time() - start_time
+    logger.info(f"Agent (native tools) completed in {elapsed:.2f}s, iterations: {iterations}")
+    
+    return AgentResult(
+        response=final_response,
+        history=new_history,
+        file_data=pending_file_data,
+    )
+
+
 async def run_agent(
     user_message: str,
     history: list[dict],
@@ -240,6 +494,23 @@ async def run_agent(
             system_prompt += f"\n\n# Context\n\n{runtime_context}\n{user_context}"
         else:
             system_prompt += f"\n\n# Context\n\n{runtime_context}"
+    
+    # Check if provider supports native tools
+    if supports_native_tools():
+        logger.info("Using native tool calling (Anthropic)")
+        return await _run_agent_native_tools(
+            user_message=user_message,
+            history=history,
+            system_prompt=system_prompt,
+            user_id=user_id,
+            status_callback=status_callback,
+            max_iterations=max_iterations,
+            images=images,
+            start_time=start_time,
+        )
+    
+    # Fall through to XML-based tool calling for Ollama/OpenRouter
+    logger.debug("Using XML-based tool calling")
     
     # Translate user message if translation is enabled
     processed_message = user_message

@@ -319,7 +319,11 @@ def main() -> None:
     llm_provider = os.getenv("LLM_PROVIDER", "ollama").lower()
     
     print(f"🚀 ClawLite started!")
-    if llm_provider == "openrouter":
+    if llm_provider == "anthropic":
+        model = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-20250514")
+        print(f"   Provider: Anthropic")
+        print(f"   Model: {model}")
+    elif llm_provider == "openrouter":
         model = os.getenv("OPENROUTER_MODEL", "google/gemini-2.0-flash-001")
         print(f"   Provider: OpenRouter")
         print(f"   Model: {model}")

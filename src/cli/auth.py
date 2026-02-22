@@ -6,14 +6,24 @@ import logging
 import webbrowser
 from typing import Optional
 
-from auth import (
-    CredentialsStore,
-    Credentials,
-    TokenInfo,
-    OAuthPKCE,
-    ANTHROPIC_OAUTH_CONFIG,
-    get_anthropic_credentials,
-)
+try:
+    from auth import (
+        CredentialsStore,
+        Credentials,
+        TokenInfo,
+        OAuthPKCE,
+        ANTHROPIC_OAUTH_CONFIG,
+        get_anthropic_credentials,
+    )
+except ImportError:
+    from ..auth import (
+        CredentialsStore,
+        Credentials,
+        TokenInfo,
+        OAuthPKCE,
+        ANTHROPIC_OAUTH_CONFIG,
+        get_anthropic_credentials,
+    )
 
 logger = logging.getLogger("clawlite.cli.auth")
 
@@ -232,7 +242,10 @@ def _auth_refresh(provider: str, instance: Optional[str] = None) -> int:
         return 1
     
     # Import refresh function
-    from auth import refresh_token, ANTHROPIC_OAUTH_CONFIG
+    try:
+        from auth import refresh_token, ANTHROPIC_OAUTH_CONFIG
+    except ImportError:
+        from ..auth import refresh_token, ANTHROPIC_OAUTH_CONFIG
     
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)

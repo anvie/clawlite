@@ -195,7 +195,11 @@ def print_startup_info(api_port: int = 8080):
     print("🦎 ClawLite - Lightweight Agentic AI")
     print("=" * 50)
     
-    if llm_provider == "openrouter":
+    if llm_provider == "anthropic":
+        model = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-20250514")
+        print(f"   Provider: Anthropic")
+        print(f"   Model: {model}")
+    elif llm_provider == "openrouter":
         model = os.getenv("OPENROUTER_MODEL", "google/gemini-2.0-flash-001")
         print(f"   Provider: OpenRouter")
         print(f"   Model: {model}")

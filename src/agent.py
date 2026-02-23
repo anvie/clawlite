@@ -27,14 +27,23 @@ logger = logging.getLogger("clawlite.agent")
 
 
 def strip_thinking_tags(text: str) -> str:
-    """Strip <thought>...</thought> or <thinking>...</thinking> tags from response.
+    """Strip thinking/reasoning tags and leaked tool calls from response.
     
     Some models (like qwen3) output thinking in tags that shouldn't be shown to users.
+    Also strips orphaned closing tags and leaked <toolcall> blocks.
     """
     # Remove <thought>...</thought> (single line or multiline)
     text = re.sub(r'<thought>.*?</thought>\s*', '', text, flags=re.DOTALL | re.IGNORECASE)
     # Remove <thinking>...</thinking>
     text = re.sub(r'<thinking>.*?</thinking>\s*', '', text, flags=re.DOTALL | re.IGNORECASE)
+    # Remove orphaned opening/closing tags
+    text = re.sub(r'</?thought>\s*', '', text, flags=re.IGNORECASE)
+    text = re.sub(r'</?thinking>\s*', '', text, flags=re.IGNORECASE)
+    # Remove leaked <toolcall> blocks (model outputting raw tool calls)
+    text = re.sub(r'<toolcall>.*?</toolcall>\s*', '', text, flags=re.DOTALL | re.IGNORECASE)
+    text = re.sub(r'<toolcall/>.*?(?=\n\n|\Z)', '', text, flags=re.DOTALL)
+    # Remove raw JSON tool calls that leaked ({"tool": ...})
+    text = re.sub(r'\{"tool":\s*"[^"]+",\s*"args":\s*\{[^}]*\}\}\s*', '', text)
     return text.strip()
 
 
@@ -633,12 +642,20 @@ async def run_agent(
         # Check for tool calls (support multiple formats)
         # Format 1: <tool_call>{"tool": "x", "args": {}}</tool_call>
         # Format 2: <toolcall>{"name": "x", "arguments": {}}</toolcall>
-        # Format 3: <tool_call>{"name": "x", "arguments": {}}</tool_call>
+        # Format 3: <toolcall/>{"tool": "x", ...} (self-closing + JSON)
+        # Format 4: <toolcall/>\n{"tool": "x", ...} (self-closing + newline + JSON)
         tool_call_match = re.search(
             r'<tool_?call>\s*(\{.*?\})\s*</tool_?call>',
             response_part,
             re.DOTALL | re.IGNORECASE
         )
+        # Also try self-closing tag format: <toolcall/> followed by JSON
+        if not tool_call_match:
+            tool_call_match = re.search(
+                r'<tool_?call\s*/>\s*(\{[^{}]*(?:\{[^{}]*\}[^{}]*)?\})',
+                response_part,
+                re.DOTALL | re.IGNORECASE
+            )
         
         if tool_call_match:
             try:
@@ -696,8 +713,10 @@ async def run_agent(
     # Translate response back to Indonesian if translation is enabled
     final_response = accumulated_response
     
-    # Always strip tool call tags from final response
-    final_response = re.sub(r'<tool_?call>.*?</tool_?call>', '', final_response, flags=re.DOTALL | re.IGNORECASE).strip()
+    # Always strip tool call tags from final response (both formats)
+    final_response = re.sub(r'<tool_?call>.*?</tool_?call>', '', final_response, flags=re.DOTALL | re.IGNORECASE)
+    final_response = re.sub(r'<tool_?call\s*/>\s*\{[^{}]*(?:\{[^{}]*\}[^{}]*)?\}', '', final_response, flags=re.DOTALL | re.IGNORECASE)
+    final_response = final_response.strip()
     
     # Fallback: if response is empty (was only tool calls), include last tool result
     if not final_response and last_tool_result:

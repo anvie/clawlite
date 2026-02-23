@@ -203,10 +203,10 @@ class OllamaProvider(LLMProvider):
                     "prompt": full_prompt,
                     "stream": True,
                     "options": {
-                        "temperature": temperature,
-                        "top_p": 0.9,
-                        "top_k": 50,
-                        "repeat_penalty": 1.1,
+                        "temperature": _get_config('llm.temperature', temperature),
+                        "top_p": _get_config('llm.top_p', 0.9),
+                        "top_k": _get_config('llm.top_k', 50),
+                        "repeat_penalty": _get_config('llm.repeat_penalty', 1.1),
                     }
                 }
             ) as response:

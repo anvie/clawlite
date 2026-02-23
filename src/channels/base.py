@@ -155,6 +155,10 @@ class BaseChannel(ABC):
         if text.strip() == "/clear":
             return await self._handle_clear(user_id)
         
+        # Handle /dump command (owner/admin only)
+        if text.strip() == "/dump":
+            return await self._handle_dump(user_id)
+        
         # Default status callback that does nothing
         if status_callback is None:
             status_callback = lambda x: None
@@ -194,3 +198,83 @@ class BaseChannel(ABC):
         except Exception as e:
             self.logger.error(f"Failed to clear conversation for {user_id}: {e}")
             return f"❌ Failed to clear: {str(e)[:200]}"
+    
+    async def _handle_dump(self, user_id: str) -> str:
+        """
+        Handle /dump command to dump full agent context to file.
+        Only available to owner/admin.
+        
+        Args:
+            user_id: Prefixed user ID
+        
+        Returns:
+            Confirmation message
+        """
+        try:
+            from ..access import is_admin
+            
+            # Only owner/admin can dump context
+            if not is_admin(user_id):
+                return "⛔ Only owner/admin can use /dump"
+            
+            import os
+            from datetime import datetime
+            import pytz
+            from ..context import load_full_context
+            from ..tools import format_tools_for_prompt
+            from ..access import is_owner
+            
+            # Build the same context that agent sees
+            workspace = os.environ.get("WORKSPACE_DIR", "/workspace")
+            tz = pytz.timezone(os.environ.get("TZ", "UTC"))
+            now = datetime.now(tz)
+            
+            # Load context components
+            user_context = load_full_context(user_id)
+            tools_prompt = format_tools_for_prompt(user_id)
+            
+            # Build runtime context
+            user_is_owner = is_owner(user_id)
+            user_is_admin_flag = is_admin(user_id)
+            
+            if user_is_owner:
+                role_info = "⚠️ THIS USER IS THE OWNER - Full admin privileges"
+            elif user_is_admin_flag:
+                role_info = "⚠️ THIS USER IS AN ADMIN - Full privileges"
+            else:
+                role_info = "Regular user (limited access)"
+            
+            # Compose full dump
+            dump_content = f"""# ClawLite Context Dump
+Generated: {now.strftime("%Y-%m-%d %H:%M:%S %Z")}
+User ID: {user_id}
+Role: {role_info}
+
+================================================================================
+## TOOLS AVAILABLE
+================================================================================
+
+{tools_prompt}
+
+================================================================================
+## USER CONTEXT (from workspace files)
+================================================================================
+
+{user_context if user_context else "(No context loaded)"}
+
+================================================================================
+# END OF DUMP
+================================================================================
+"""
+            
+            # Write to file
+            dump_path = os.path.join(workspace, "context.dump.txt")
+            with open(dump_path, "w") as f:
+                f.write(dump_content)
+            
+            self.logger.info(f"Context dumped for {user_id} to {dump_path}")
+            return f"📄 Context dumped to `context.dump.txt` ({len(dump_content)} chars)"
+            
+        except Exception as e:
+            self.logger.error(f"Failed to dump context for {user_id}: {e}")
+            return f"❌ Failed to dump: {str(e)[:200]}"

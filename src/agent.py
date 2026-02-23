@@ -31,9 +31,16 @@ def strip_thinking_tags(text: str) -> str:
     
     Some models (like qwen3) output thinking in tags that shouldn't be shown to users.
     Also strips orphaned closing tags and leaked <toolcall> blocks.
+    Handles models that wrap actual response in <response> tags.
     """
     if not text:
         return ""
+    
+    # FIRST: Check if response is wrapped in <response> tags - extract only that
+    response_match = re.search(r'<response>([\s\S]*?)</response>', text, flags=re.IGNORECASE)
+    if response_match:
+        # Model wrapped the actual response - use only that content
+        text = response_match.group(1).strip()
     
     # Remove complete <thought>...</thought> blocks (single line or multiline)
     text = re.sub(r'<thought>[\s\S]*?</thought>', '', text, flags=re.IGNORECASE)
@@ -45,6 +52,8 @@ def strip_thinking_tags(text: str) -> str:
     text = re.sub(r'</thought>', '', text, flags=re.IGNORECASE)
     text = re.sub(r'<thinking>', '', text, flags=re.IGNORECASE)
     text = re.sub(r'</thinking>', '', text, flags=re.IGNORECASE)
+    text = re.sub(r'<response>', '', text, flags=re.IGNORECASE)
+    text = re.sub(r'</response>', '', text, flags=re.IGNORECASE)
     
     # Remove leaked <toolcall> blocks in various formats
     text = re.sub(r'<toolcall>[\s\S]*?</toolcall>', '', text, flags=re.IGNORECASE)

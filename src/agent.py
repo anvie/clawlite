@@ -289,7 +289,10 @@ async def _run_agent_native_tools(
                     if status_callback and (current_time - last_update > 1.0):
                         try:
                             if turn_text:
-                                await status_callback(f"{turn_text[:1500]}▌")
+                                # Strip thinking tags before streaming to user
+                                clean_text = strip_thinking_tags(turn_text)
+                                if clean_text:
+                                    await status_callback(f"{clean_text[:1500]}▌")
                         except Exception as e:
                             logger.warning(f"Status callback failed: {e}")
                         last_update = current_time
@@ -614,8 +617,9 @@ async def run_agent(
                             await status_callback(f"🧠 _Thinking..._\n```\n{preview}▌\n```")
                             thinking_shown = True
                         elif not is_thinking and current_response:
-                            # Show response progress
+                            # Show response progress (strip thinking tags before showing)
                             clean = current_response.split("</think>")[-1].strip() if "</think>" in current_response else current_response.strip()
+                            clean = strip_thinking_tags(clean)
                             if clean:
                                 await status_callback(f"{clean[:1500]}▌")
                     except Exception as e:

@@ -399,17 +399,16 @@ def create_instance(
     config_file = os.path.join(instance_path, "config.yaml")
     if not os.path.exists(config_file):
         with open(config_file, "w") as f:
-            f.write(CONFIG_TEMPLATE.format(instance_name=instance_name))
+            f.write(CONFIG_TEMPLATE.format(
+                instance_name=instance_name,
+                api_port=api_port,
+            ))
     
     # Generate .env if not from template
     env_file = os.path.join(instance_path, ".env")
     env_example = os.path.join(instance_path, ".env.example")
     if not os.path.exists(env_file):
-        content = ENV_TEMPLATE.format(
-            instance_name=instance_name,
-            template_name=template_name,
-            api_port=api_port,
-        )
+        content = ENV_TEMPLATE.format(instance_name=instance_name)
         with open(env_file, "w") as f:
             f.write(content)
         # Also create .env.example

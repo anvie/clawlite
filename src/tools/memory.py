@@ -148,20 +148,49 @@ class UserUpdateTool(Tool):
     """Update user info."""
     
     name = "user_update"
-    description = "Update USER.md with information about the user (name, preferences, etc.)"
+    description = "Update USER.md with user information (name, phone, email, preferences)"
     parameters = {
-        "content": {
+        "name": {
             "type": "string",
-            "description": "Content to write to USER.md (replaces existing)",
-            "required": True
+            "description": "User's name",
+            "required": False
+        },
+        "phone": {
+            "type": "string",
+            "description": "User's phone number",
+            "required": False
+        },
+        "email": {
+            "type": "string",
+            "description": "User's email address",
+            "required": False
+        },
+        "notes": {
+            "type": "string",
+            "description": "Additional notes or preferences",
+            "required": False
         }
     }
     
     user_id: Optional[str] = None
     
-    async def execute(self, content: str) -> ToolResult:
+    async def execute(self, name: str = None, phone: str = None, email: str = None, notes: str = None) -> ToolResult:
         if not self.user_id:
             return ToolResult(success=False, error="User ID not set")
+        
+        # Build content from structured data
+        content_parts = ["# User Info\n"]
+        
+        if name:
+            content_parts.append(f"Name: {name}")
+        if phone:
+            content_parts.append(f"Phone: {phone}")
+        if email:
+            content_parts.append(f"Email: {email}")
+        if notes:
+            content_parts.append(f"\n## Notes\n{notes}")
+        
+        content = "\n".join(content_parts)
         
         try:
             user_dir = get_user_dir(self.user_id)

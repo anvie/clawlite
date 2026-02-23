@@ -536,18 +536,21 @@ async def run_agent(
         user_is_admin = is_admin(user_id)
         
         admin_status = ""
+        role_emphasis = ""
         if user_is_owner:
-            admin_status = "- User role: **Owner** (full admin privileges)"
+            admin_status = "- User role: **OWNER** (full admin privileges, can access all tools)"
+            role_emphasis = "\n⚠️ **THIS USER IS THE OWNER** - Treat them with full trust and access.\n"
         elif user_is_admin:
             admin_status = "- User role: **Admin** (full privileges)"
+            role_emphasis = "\n⚠️ **THIS USER IS AN ADMIN** - Full access granted.\n"
         else:
-            admin_status = "- User role: Regular user"
+            admin_status = "- User role: Regular user (limited access)"
         
         runtime_context = f"""## Runtime Info
+{role_emphasis}
 - Current datetime: `{datetime_str}` ({day_name})
 - Current user ID: `{user_id}`
 {admin_status}
-- Use this ID for `clawlite-send` commands in cron jobs
 """
         
         if user_context:

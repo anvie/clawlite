@@ -470,20 +470,42 @@ After setup, users can still modify `SOUL.md` anytime by asking the bot or using
 
 ## Configuration Reference
 
+### config.yaml (main configuration)
+
+| Key | Description | Default |
+|-----|-------------|---------|
+| `llm.provider` | LLM provider (`ollama`, `openrouter`, `anthropic`) | `ollama` |
+| `llm.model` | Model name/ID | `llama3.2:3b` |
+| `llm.host` | Ollama server URL (ollama only) | `http://localhost:11434` |
+| `llm.timeout` | Request timeout in seconds | `60` |
+| `channels.telegram.enabled` | Enable Telegram channel | `true` |
+| `channels.whatsapp.enabled` | Enable WhatsApp channel | `false` |
+| `channels.whatsapp.session_dir` | WhatsApp session storage | `/data/whatsapp` |
+| `access.allowed_users` | Allowed user IDs (empty = all) | `[]` |
+| `access.admins` | Admin user IDs (bypass restrictions) | `[]` |
+| `agent.max_iterations` | Max tool calls per turn | `10` |
+| `agent.tool_timeout` | Seconds per tool execution | `30` |
+| `tools.allowed` | Allowed tools (empty = all) | `[]` |
+| `conversation.record` | Save conversations to files | `true` |
+| `conversation.retention_days` | Auto-delete old files | `7` |
+| `api.port` | Internal API server port | `8080` |
+| `logging.level` | Log level | `INFO` |
+
+### .env (secrets only)
+
+| Variable | Description |
+|----------|-------------|
+| `TELEGRAM_TOKEN` | Bot token from @BotFather |
+| `OPENROUTER_API_KEY` | OpenRouter API key |
+| `ANTHROPIC_API_KEY` | Anthropic API key |
+| `ANTHROPIC_AUTH_TOKEN` | Anthropic OAuth token (alternative) |
+
+### Infrastructure (Docker runtime)
+
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `ENABLED_CHANNELS` | Channels to enable (`telegram`, `whatsapp`) | `telegram` |
-| `LLM_PROVIDER` | LLM provider (`ollama` or `openrouter`) | `ollama` |
-| `TELEGRAM_TOKEN` | Bot token from @BotFather | - |
-| `TELEGRAM_ALLOWED_USERS` | Allowed Telegram user IDs | empty (all) |
-| `WHATSAPP_SESSION_DIR` | WhatsApp session storage | `/data/whatsapp` |
-| `WHATSAPP_ALLOWED_USERS` | Allowed phone numbers | empty (all) |
-| `ALLOWED_USERS` | Global fallback allowlist | empty (all) |
-| `OLLAMA_HOST` | Ollama server URL | `http://localhost:11434` |
-| `OLLAMA_MODEL` | Ollama model name | `llama3.2:3b` |
-| `OPENROUTER_API_KEY` | OpenRouter API key | - |
-| `OPENROUTER_MODEL` | OpenRouter model ID | `google/gemini-2.5-pro-preview-03-25` |
-| `WORKSPACE_PATH` | Workspace directory | `/workspace` |
+| `WORKSPACE_PATH` | Workspace directory mount | `/workspace` |
+| `SKILLS_DIR` | Skills directory mount | `/app/skills` |
 
 ## Security (Docker mode)
 
@@ -502,16 +524,20 @@ When running in Docker, additional security constraints apply:
 
 If Ollama runs on a different machine:
 
-**Python mode:** Set `OLLAMA_HOST=http://192.168.1.100:11434` in `.env`
+**Set in config.yaml:**
+```yaml
+llm:
+  provider: ollama
+  host: http://192.168.1.100:11434
+  model: llama3.2:3b
+```
 
-**Docker mode:** Update `docker-compose.yml`:
-
+**Docker mode:** Also update `docker-compose.yml` if needed:
 ```yaml
 extra_hosts:
   - "ollama-host:192.168.1.100"
 ```
-
-And set `OLLAMA_HOST=http://ollama-host:11434` in `.env`.
+Then use `host: http://ollama-host:11434` in config.yaml.
 
 ## Recommended Models
 

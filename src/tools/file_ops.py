@@ -36,10 +36,10 @@ class ReadFileTool(Tool):
 
 class WriteFileTool(Tool):
     name = "write_file"
-    description = "Write or create a file. Regular users: workspace only. Admin/owner: any path."
+    description = "Create NEW files or OVERWRITE entire file. ⚠️ For UPDATES use edit_file instead! Regular users: workspace only. Admin/owner: any path."
     parameters = {
         "path": "string - relative path to file (or absolute for admin)",
-        "content": "string - content to write"
+        "content": "string - content to write (replaces entire file)"
     }
     
     async def execute(self, path: str = "", content: str = "", **kwargs) -> ToolResult:
@@ -68,13 +68,15 @@ class WriteFileTool(Tool):
 
 class EditFileTool(Tool):
     name = "edit_file"
-    description = """Edit a file using search/replace or append. More token-efficient than write_file for small changes.
+    description = """✅ PREFERRED for updating existing files (AGENTS.md, TOOLS.md, etc.). Safer than write_file - won't lose data!
 Regular users: workspace only. Admin/owner: any path.
 
 Modes:
-1. Search/replace: provide old_text and new_text (old_text must match exactly once)
+1. Search/replace: provide old_text and new_text (old_text must match exactly once) - SAFEST
 2. Append: set append=true to add content at end of file
-3. Prepend: set prepend=true to add content at beginning of file"""
+3. Prepend: set prepend=true to add content at beginning of file
+
+More token-efficient than write_file for small changes."""
     
     parameters = {
         "path": "string - relative path to file",

@@ -36,10 +36,33 @@ Read contents of a file from workspace.
 ```
 
 #### write_file
-Create or update a file in workspace.
+**Create new files** or **overwrite** entire file. Use ONLY for new files.
 ```json
 {"tool": "write_file", "args": {"path": "path/to/file.txt", "content": "file contents here"}}
 ```
+
+#### edit_file
+**Update existing files** without overwriting. **ALWAYS USE THIS for updates!**
+
+**Search/replace** (safest - finds exact text once):
+```json
+{"tool": "edit_file", "args": {"path": "file.md", "old_text": "exact text to find", "new_text": "replacement text"}}
+```
+
+**Append to end**:
+```json
+{"tool": "edit_file", "args": {"path": "file.md", "content": "text to add", "append": true}}
+```
+
+**Prepend to beginning**:
+```json
+{"tool": "edit_file", "args": {"path": "file.md", "content": "text to add", "prepend": true}}
+```
+
+**CRITICAL RULE:** 
+- For **NEW** files → use `write_file`
+- For **EXISTING** files → use `edit_file` (search/replace or append)
+- **NEVER** use `write_file` to update AGENTS.md, TOOLS.md, MEMORY.md, etc. — you'll lose all existing content!
 
 #### list_dir
 List contents of a directory.

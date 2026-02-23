@@ -51,6 +51,7 @@ class TelegramChannel(BaseChannel):
         self.application.add_handler(CommandHandler("clear", self._cmd_clear))
         self.application.add_handler(CommandHandler("tools", self._cmd_tools))
         self.application.add_handler(CommandHandler("workspace", self._cmd_workspace))
+        self.application.add_handler(CommandHandler("dump", self._cmd_dump))
         self.application.add_handler(MessageHandler(filters.PHOTO, self._handle_photo))
         self.application.add_handler(MessageHandler(filters.Document.ALL, self._handle_document))
         self.application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self._handle_message))
@@ -181,6 +182,16 @@ class TelegramChannel(BaseChannel):
             )
         else:
             await update.message.reply_text(f"❌ Error: {result.error}")
+    
+    async def _cmd_dump(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handle /dump command - dump full context to file."""
+        user_id = self.format_user_id(update.effective_user.id)
+        if not self.is_allowed(user_id):
+            return
+        
+        # Use the base class handler
+        result = await self._handle_dump(user_id)
+        await update.message.reply_text(result)
     
     async def _handle_message(
         self,

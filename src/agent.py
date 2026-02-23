@@ -680,8 +680,6 @@ async def run_agent(
         else:
             response_part = current_response.strip()
         
-        accumulated_response += response_part
-        
         # Check for tool calls (support multiple formats)
         # Search in both response_part AND full current_response (model may mix formats)
         search_text = current_response  # Search full response to catch all formats
@@ -761,8 +759,9 @@ async def run_agent(
                 logger.warning(f"Failed to parse tool call: {tool_json[:200]}")
                 full_prompt += f"{response_part}\n\n<tool_result>\n{error_text}\n</tool_result>\n\nassistant\n"
         else:
-            # No tool call, we're done
+            # No tool call, this is the final response
             logger.debug("No tool call found, finishing agent loop")
+            accumulated_response = response_part  # Use final response, don't accumulate previous iterations
             break
     
     # Translate response back to Indonesian if translation is enabled

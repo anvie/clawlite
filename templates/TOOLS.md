@@ -1,13 +1,14 @@
-# TOOLS.md — Local Tool Notes
+# TOOLS.md — Tool Notes & Configuration
 
-Document tool-specific configuration and notes here.
+> **Note:** Available tools are loaded dynamically based on your access level.
+> This file is for your personal notes about tools, servers, and configurations.
 
 ## Servers & Services
 
-*Add your server details:*
+*Document your server details:*
 
-```
-### Example Server
+```markdown
+### Production Server
 - Host: 192.168.1.100
 - SSH: ssh user@192.168.1.100
 - Services: nginx, postgres
@@ -15,23 +16,23 @@ Document tool-specific configuration and notes here.
 
 ## API Endpoints
 
-*Document APIs you frequently use:*
+*APIs you frequently use:*
 
-```
+```markdown
 ### Weather API
 - URL: https://api.weather.example/v1
 - Auth: API key in header
 - Usage: GET /forecast?city=Jakarta
 ```
 
-## Cron Jobs
+## Cron Job Notes
 
-*Track scheduled tasks:*
+*Track your scheduled tasks:*
 
-| Schedule | Command | Purpose |
-|----------|---------|---------|
-| `0 9 * * *` | `python report.py` | Daily report |
-| `*/5 * * * *` | `curl health.check` | Health ping |
+| Schedule | Purpose | Notes |
+|----------|---------|-------|
+| `0 9 * * *` | Daily reminder | Via clawlite-send |
+| `0 18 * * 5` | Weekly report | Friday 6pm |
 
 ## Common Commands
 
@@ -48,14 +49,12 @@ find . -size +100M
 tail -f /var/log/app.log
 ```
 
-## Notes
+## Tips
 
-*General notes and reminders:*
-
-- Remember to backup before major changes
 - Use `run_bash` for multi-line scripts
 - Grep supports `-i` for case-insensitive search
+- `edit_file` with `append: true` to add to existing files
 
 ---
 
-*This file is shared across all users. Add tool notes that apply to everyone.*
+*This file is shared across all users. Add notes that apply to everyone.*

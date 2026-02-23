@@ -65,6 +65,10 @@ def load_system_prompt(user_id: Optional[str] = None) -> str:
     except FileNotFoundError:
         prompt = get_default_system_prompt(user_id)
     
+    # Inject dynamic tools section based on user access level
+    tools_section = format_tools_for_prompt(user_id)
+    prompt += f"\n\n## Available Tools\n\n{tools_section}"
+    
     # Add skill prompts if any skills loaded
     skill_prompts = format_skill_prompts()
     if skill_prompts:

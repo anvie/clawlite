@@ -57,12 +57,12 @@ def read_file_safe(path: Path) -> Optional[str]:
 
 
 def load_shared_context() -> str:
-    """Load shared context files (SOUL.md, AGENTS.md, TOOLS.md)."""
+    """Load shared context files (SOUL.md, AGENTS.md, CONTEXT.md, TOOLS.md)."""
     workspace = Path(WORKSPACE_DIR)
     parts = []
     
-    # Shared files
-    for filename in ["SOUL.md", "AGENTS.md", "TOOLS.md"]:
+    # Shared files in order: Identity → Rules → Domain → Tools (notes only)
+    for filename in ["SOUL.md", "AGENTS.md", "CONTEXT.md", "TOOLS.md"]:
         content = read_file_safe(workspace / filename)
         if content:
             parts.append(f"## {filename}\n\n{content}")

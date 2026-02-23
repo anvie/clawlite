@@ -4,7 +4,7 @@ import logging
 from typing import Optional
 
 from .base import Tool, ToolResult
-from .file_ops import ReadFileTool, WriteFileTool, ListDirTool
+from .file_ops import ReadFileTool, WriteFileTool, EditFileTool, ListDirTool
 from .shell import ExecTool, RunBashTool, RunPythonTool, KillProcessTool, ListProcessesTool
 from .search import GrepTool, FindFilesTool
 from .cron import ListCronTool, AddCronTool, RemoveCronTool
@@ -60,6 +60,7 @@ def _filter_tools_by_config(tools: dict, user_id: Optional[str] = None) -> dict:
 _ALL_TOOLS = {
     "read_file": ReadFileTool(),
     "write_file": WriteFileTool(),
+    "edit_file": EditFileTool(),
     "list_dir": ListDirTool(),
     "exec": ExecTool(),
     "run_bash": RunBashTool(),

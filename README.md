@@ -207,8 +207,15 @@ See [OpenRouter Models](https://openrouter.ai/models) for available models.
 | Tool | Description | Parameters |
 |------|-------------|------------|
 | `read_file` | Read file contents | `path` |
-| `write_file` | Create/update files | `path`, `content` |
+| `write_file` | Create/overwrite file | `path`, `content` |
+| `edit_file` | Edit file (search/replace or append) | `path`, `old_text`, `new_text` or `content`, `append` |
 | `list_dir` | List directory contents | `path` (default: `.`) |
+
+**`edit_file` modes:**
+- **Replace:** `edit_file(path, old_text="find this", new_text="replace with")` — old_text must match exactly once
+- **Append:** `edit_file(path, content="add this", append=true)`
+- **Prepend:** `edit_file(path, content="add this", prepend=true)`
+- **Delete:** `edit_file(path, old_text="remove this", new_text="")`
 
 ### Shell Operations
 

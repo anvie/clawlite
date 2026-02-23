@@ -32,18 +32,37 @@ def strip_thinking_tags(text: str) -> str:
     Some models (like qwen3) output thinking in tags that shouldn't be shown to users.
     Also strips orphaned closing tags and leaked <toolcall> blocks.
     """
-    # Remove <thought>...</thought> (single line or multiline)
-    text = re.sub(r'<thought>.*?</thought>\s*', '', text, flags=re.DOTALL | re.IGNORECASE)
-    # Remove <thinking>...</thinking>
-    text = re.sub(r'<thinking>.*?</thinking>\s*', '', text, flags=re.DOTALL | re.IGNORECASE)
-    # Remove orphaned opening/closing tags
-    text = re.sub(r'</?thought>\s*', '', text, flags=re.IGNORECASE)
-    text = re.sub(r'</?thinking>\s*', '', text, flags=re.IGNORECASE)
-    # Remove leaked <toolcall> blocks (model outputting raw tool calls)
-    text = re.sub(r'<toolcall>.*?</toolcall>\s*', '', text, flags=re.DOTALL | re.IGNORECASE)
-    text = re.sub(r'<toolcall/>.*?(?=\n\n|\Z)', '', text, flags=re.DOTALL)
-    # Remove raw JSON tool calls that leaked ({"tool": ...})
-    text = re.sub(r'\{"tool":\s*"[^"]+",\s*"args":\s*\{[^}]*\}\}\s*', '', text)
+    if not text:
+        return ""
+    
+    # Remove complete <thought>...</thought> blocks (single line or multiline)
+    text = re.sub(r'<thought>[\s\S]*?</thought>', '', text, flags=re.IGNORECASE)
+    # Remove complete <thinking>...</thinking> blocks
+    text = re.sub(r'<thinking>[\s\S]*?</thinking>', '', text, flags=re.IGNORECASE)
+    
+    # Remove orphaned/incomplete tags (opening or closing)
+    text = re.sub(r'<thought>', '', text, flags=re.IGNORECASE)
+    text = re.sub(r'</thought>', '', text, flags=re.IGNORECASE)
+    text = re.sub(r'<thinking>', '', text, flags=re.IGNORECASE)
+    text = re.sub(r'</thinking>', '', text, flags=re.IGNORECASE)
+    
+    # Remove leaked <toolcall> blocks in various formats
+    text = re.sub(r'<toolcall>[\s\S]*?</toolcall>', '', text, flags=re.IGNORECASE)
+    text = re.sub(r'<tool_call>[\s\S]*?</tool_call>', '', text, flags=re.IGNORECASE)
+    # Self-closing tag followed by JSON on same or next line
+    text = re.sub(r'<toolcall\s*/>\s*\{[^}]*\}', '', text, flags=re.IGNORECASE)
+    text = re.sub(r'<tool_call\s*/>\s*\{[^}]*\}', '', text, flags=re.IGNORECASE)
+    # Just the self-closing tags
+    text = re.sub(r'<toolcall\s*/>', '', text, flags=re.IGNORECASE)
+    text = re.sub(r'<tool_call\s*/>', '', text, flags=re.IGNORECASE)
+    
+    # Remove raw JSON tool calls that leaked ({"tool": ...} patterns)
+    text = re.sub(r'\{"tool":\s*"[^"]*"[^}]*\}', '', text)
+    text = re.sub(r'\{"name":\s*"[^"]*"[^}]*\}', '', text)
+    
+    # Clean up excessive whitespace left behind
+    text = re.sub(r'\n{3,}', '\n\n', text)
+    
     return text.strip()
 
 
@@ -644,22 +663,34 @@ async def run_agent(
         accumulated_response += response_part
         
         # Check for tool calls (support multiple formats)
+        # Search in both response_part AND full current_response (model may mix formats)
+        search_text = current_response  # Search full response to catch all formats
+        
+        tool_call_match = None
+        tool_json = None
+        
         # Format 1: <tool_call>{"tool": "x", "args": {}}</tool_call>
-        # Format 2: <toolcall>{"name": "x", "arguments": {}}</toolcall>
-        # Format 3: <toolcall/>{"tool": "x", ...} (self-closing + JSON)
-        # Format 4: <toolcall/>\n{"tool": "x", ...} (self-closing + newline + JSON)
-        tool_call_match = re.search(
-            r'<tool_?call>\s*(\{.*?\})\s*</tool_?call>',
-            response_part,
-            re.DOTALL | re.IGNORECASE
-        )
-        # Also try self-closing tag format: <toolcall/> followed by JSON
+        match = re.search(r'<tool_?call>\s*(\{[\s\S]*?\})\s*</tool_?call>', search_text, re.IGNORECASE)
+        if match:
+            tool_call_match = match
+        
+        # Format 2: <toolcall/> followed by JSON (self-closing)
         if not tool_call_match:
-            tool_call_match = re.search(
-                r'<tool_?call\s*/>\s*(\{[^{}]*(?:\{[^{}]*\}[^{}]*)?\})',
-                response_part,
-                re.DOTALL | re.IGNORECASE
-            )
+            match = re.search(r'<tool_?call\s*/>\s*(\{[\s\S]*?"args"[\s\S]*?\})', search_text, re.IGNORECASE)
+            if match:
+                tool_call_match = match
+        
+        # Format 3: Just find JSON with "tool" key after any toolcall-like tag
+        if not tool_call_match:
+            match = re.search(r'<tool[^>]*>\s*(\{[^{}]*"tool"[^{}]*\})', search_text, re.IGNORECASE)
+            if match:
+                tool_call_match = match
+        
+        # Format 4: Standalone JSON with tool/args pattern (no tags)
+        if not tool_call_match:
+            match = re.search(r'(\{"tool"\s*:\s*"[^"]+"\s*,\s*"args"\s*:\s*\{[^}]*\}\s*\})', search_text)
+            if match:
+                tool_call_match = match
         
         if tool_call_match:
             try:
@@ -717,9 +748,11 @@ async def run_agent(
     # Translate response back to Indonesian if translation is enabled
     final_response = accumulated_response
     
-    # Always strip tool call tags from final response (both formats)
-    final_response = re.sub(r'<tool_?call>.*?</tool_?call>', '', final_response, flags=re.DOTALL | re.IGNORECASE)
-    final_response = re.sub(r'<tool_?call\s*/>\s*\{[^{}]*(?:\{[^{}]*\}[^{}]*)?\}', '', final_response, flags=re.DOTALL | re.IGNORECASE)
+    # Strip all thinking tags and tool call leaks
+    final_response = strip_thinking_tags(final_response)
+    
+    # Additional cleanup for tool-related tags
+    final_response = re.sub(r'</?tool_?result>', '', final_response, flags=re.IGNORECASE)
     final_response = final_response.strip()
     
     # Fallback: if response is empty (was only tool calls), include last tool result

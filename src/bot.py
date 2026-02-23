@@ -1,13 +1,27 @@
 #!/usr/bin/env python3
 """
-ClawLite - Telegram Bot
+ClawLite - Telegram Bot (LEGACY)
+
+⚠️  DEPRECATED: This module is for backward compatibility only.
+    Use `python -m src.main` instead, which reads config from config.yaml.
+    This legacy module still reads from environment variables.
+
 Lightweight agentic AI powered by Ollama with tool calling
 """
 
 import os
 import base64
 import logging
+import warnings
 from datetime import datetime
+
+# Emit deprecation warning when imported
+warnings.warn(
+    "src.bot is deprecated. Use 'python -m src.main' instead. "
+    "This module reads from env vars; the new entry point uses config.yaml.",
+    DeprecationWarning,
+    stacklevel=2
+)
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 from dotenv import load_dotenv

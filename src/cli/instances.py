@@ -91,57 +91,64 @@ def ensure_clawlite_image() -> bool:
         logger.error(f"Failed to build {CLAWLITE_IMAGE}")
         return False
 
-# Default config template
+# Default config template (all non-secret config)
 CONFIG_TEMPLATE = """# ClawLite Configuration - {instance_name}
+# Secrets (API keys, tokens) go in .env file
 
+# LLM settings
+llm:
+  provider: openrouter
+  model: google/gemini-2.0-flash-001
+  # host: http://localhost:11434  # for ollama
+  timeout: 60
+
+# Access control
 access:
   allowed_users: []
   admins: []
 
-llm:
-  provider: openrouter
-  timeout: 60
-
-agent:
-  max_iterations: 10
-  tool_timeout: 30
-  total_timeout: 300
-
-tools:
-  allowed: []
-
+# Channel settings
 channels:
   telegram:
     enabled: true
   whatsapp:
     enabled: false
 
+# Agent behavior
+agent:
+  max_iterations: 10
+  tool_timeout: 30
+  total_timeout: 300
+
+# Tool settings
+tools:
+  allowed: []
+
+# Conversation persistence
 conversation:
   record: true
   retention_days: 7
 
+# API server
+api:
+  port: {api_port}
+
+# Logging
 logging:
   level: INFO
 """
 
-# Default .env template
+# Default .env template (secrets only)
 ENV_TEMPLATE = """# ClawLite Instance: {instance_name}
-# Generated from template: {template_name}
+# Secrets only - all other config in config.yaml
 
-# === LLM Provider ===
-LLM_PROVIDER=openrouter
-OPENROUTER_API_KEY=your-api-key-here
-OPENROUTER_MODEL=google/gemini-2.0-flash-001
+# === API Keys ===
+OPENROUTER_API_KEY=
+# ANTHROPIC_API_KEY=
+# ANTHROPIC_AUTH_TOKEN=
 
-# === Telegram ===
-TELEGRAM_TOKEN=your-telegram-bot-token
-ALLOWED_USERS=
-
-# === API Server ===
-API_PORT={api_port}
-
-# === Workspace ===
-WORKSPACE_PATH=/workspace
+# === Bot Tokens ===
+TELEGRAM_TOKEN=
 """
 
 

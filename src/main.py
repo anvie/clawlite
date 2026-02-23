@@ -189,26 +189,26 @@ async def run_channels():
 
 def print_startup_info(api_port: int = 8080):
     """Print startup information."""
-    llm_provider = os.getenv("LLM_PROVIDER", "ollama").lower()
+    from .config import get as config_get
+    from .llm import get_llm_provider, get_llm_model, get_llm_host
+    
+    provider = get_llm_provider()
+    model = get_llm_model()
     
     print("\n" + "=" * 50)
     print("🦎 ClawLite - Lightweight Agentic AI")
     print("=" * 50)
     
-    if llm_provider == "anthropic":
-        model = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-20250514")
+    if provider == "anthropic":
         print(f"   Provider: Anthropic")
         print(f"   Model: {model}")
-    elif llm_provider == "openrouter":
-        model = os.getenv("OPENROUTER_MODEL", "google/gemini-2.0-flash-001")
+    elif provider == "openrouter":
         print(f"   Provider: OpenRouter")
         print(f"   Model: {model}")
     else:
-        ollama_host = os.getenv("OLLAMA_HOST", "http://localhost:11434")
-        ollama_model = os.getenv("OLLAMA_MODEL", "llama3.2:3b")
         print(f"   Provider: Ollama")
-        print(f"   Model: {ollama_model}")
-        print(f"   Host: {ollama_host}")
+        print(f"   Model: {model}")
+        print(f"   Host: {get_llm_host()}")
     
     print(f"   Workspace: {os.getenv('WORKSPACE_PATH', '/workspace')}")
     print(f"   API: http://127.0.0.1:{api_port}")

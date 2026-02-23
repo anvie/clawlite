@@ -1,68 +1,40 @@
+# ========================================
 # ClawLite Configuration
-# Copy this file to config.yaml and customize
-
-# Access control
-access:
-  # Allowed users (empty = all allowed, list = only those)
-  # Use prefixed IDs: tg_<id> for Telegram, wa_<id> for WhatsApp
-  allowed_users: []
-  
-  # Admin users (always allowed + bypass tool restrictions)
-  # Example: ["tg_123456", "wa_628123456"]
-  admins: []
+# ========================================
+# Copy this file to config.yaml and customize.
+# Secrets (API keys, tokens) go in .env file.
 
 # LLM settings
 llm:
   # Provider: ollama | openrouter | anthropic
   provider: ollama
   
-  # Ollama settings
+  # Model name (provider-specific)
+  # Ollama: llama3.2:3b, qwen2.5:7b, etc.
+  # OpenRouter: google/gemini-2.0-flash-001, anthropic/claude-3.5-sonnet, etc.
+  # Anthropic: claude-sonnet-4-20250514, claude-3-5-haiku-20241022, etc.
   model: llama3.2:3b
+  
+  # Ollama host (only for ollama provider)
   host: http://localhost:11434
+  
+  # Request timeout in seconds
   timeout: 60
   
-  # OpenRouter settings (if provider: openrouter)
-  # openrouter_model: google/gemini-2.0-flash-001
-  # openrouter_api_key: ${OPENROUTER_API_KEY}
-  
-  # Anthropic settings (if provider: anthropic)
-  # anthropic_model: claude-sonnet-4-20250514
-  # 
-  # Auth option 1: API Key (from Anthropic Console)
-  # anthropic_api_key: ${ANTHROPIC_API_KEY}
-  # 
-  # Auth option 2: OAuth Token (from `claude setup-token`)
-  # anthropic_auth_token: ${ANTHROPIC_AUTH_TOKEN}
-  # 
-  # If both set, OAuth token takes precedence.
-  # 
-  # Extended thinking (Claude Sonnet/Opus feature)
-  # anthropic_extended_thinking: true  # Enable by default
-  # anthropic_thinking_budget: 10000   # Max thinking tokens
+  # Anthropic-specific settings
+  # extended_thinking: true
+  # thinking_budget: 10000
 
-# Agent behavior
-agent:
-  max_iterations: 10
-  tool_timeout: 30        # seconds per tool execution
-  total_timeout: 300      # 5 min max per conversation turn
-  retry_attempts: 3       # LLM retry attempts
-
-# Tool settings
-tools:
-  # Allowed tools (empty = all tools enabled)
-  # Example: only enable specific tools
-  # allowed:
-  #   - read_file
-  #   - write_file
-  #   - web_search
-  allowed: []
+# Access control
+access:
+  # Allowed users (empty = everyone allowed)
+  # Use prefixed IDs: tg_<id> for Telegram, wa_<id> for WhatsApp
+  # Example: ["tg_123456", "wa_628123456789"]
+  allowed_users: []
   
-  # Per-tool configuration
-  options:
-    web_search:
-      max_results: 5
-    web_fetch:
-      max_chars: 10000
+  # Admin users (bypass all restrictions)
+  # Admins can use all tools regardless of tools.allowed
+  admins: []
 
 # Channel settings
 channels:
@@ -70,11 +42,36 @@ channels:
     enabled: true
   whatsapp:
     enabled: false
+    session_dir: /data/whatsapp
+
+# Agent behavior
+agent:
+  max_iterations: 10      # Max tool calls per turn
+  tool_timeout: 30        # Seconds per tool execution
+  total_timeout: 300      # 5 min max per conversation turn
+  retry_attempts: 3       # LLM retry on failure
+
+# Tool settings
+tools:
+  # Allowed tools (empty = all enabled)
+  # Admins bypass this restriction
+  allowed: []
+  
+  # Per-tool options
+  options:
+    web_search:
+      max_results: 5
+    web_fetch:
+      max_chars: 10000
 
 # Conversation persistence
 conversation:
-  record: false           # Enable recording
-  retention_days: 3       # Auto-delete files older than this
+  record: true            # Save conversations to files
+  retention_days: 7       # Auto-delete old files
+
+# API server
+api:
+  port: 8080
 
 # Logging
 logging:

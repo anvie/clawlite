@@ -65,8 +65,12 @@ class WhatsAppChannel(BaseChannel):
         
         super().__init__(agent_callback)
         
-        # Configuration
-        self.session_dir = os.getenv("WHATSAPP_SESSION_DIR", "/data/whatsapp")
+        # Configuration from config.yaml
+        try:
+            from ..config import get as config_get
+            self.session_dir = config_get("channels.whatsapp.session_dir", "/data/whatsapp")
+        except ImportError:
+            self.session_dir = "/data/whatsapp"
         
         # Ensure session directory exists
         os.makedirs(self.session_dir, exist_ok=True)

@@ -92,50 +92,110 @@ ClawLite provides a unified CLI for managing instances and templates:
 ./clawlite templates list
 ```
 
-## Channel Configuration
+## Configuration
 
-### Telegram Only (default)
+ClawLite uses two config files:
+- **`config.yaml`** - All settings (LLM, channels, access control, etc.)
+- **`.env`** - Secrets only (API keys, tokens)
 
-```env
-ENABLED_CHANNELS=telegram
-TELEGRAM_TOKEN=your_bot_token_here
-TELEGRAM_ALLOWED_USERS=123456,789012  # optional
+### config.yaml (main configuration)
+
+```yaml
+# LLM settings
+llm:
+  provider: openrouter  # ollama | openrouter | anthropic
+  model: google/gemini-2.0-flash-001
+  host: http://localhost:11434  # for ollama only
+  timeout: 60
+
+# Access control
+access:
+  allowed_users: []  # empty = everyone allowed
+  admins: [tg_123456]  # bypass all restrictions
+
+# Channel settings
+channels:
+  telegram:
+    enabled: true
+  whatsapp:
+    enabled: false
+
+# Agent behavior
+agent:
+  max_iterations: 10
+  tool_timeout: 30
+  total_timeout: 300
+
+# Tool filtering (empty = all tools)
+tools:
+  allowed: []
+
+# Conversation persistence
+conversation:
+  record: true
+  retention_days: 7
+
+logging:
+  level: INFO
 ```
 
-### WhatsApp Only
+### .env (secrets only)
 
 ```env
-ENABLED_CHANNELS=whatsapp
-WHATSAPP_SESSION_DIR=/data/whatsapp
-WHATSAPP_ALLOWED_USERS=628xxx,628yyy  # optional
+# API Keys
+OPENROUTER_API_KEY=sk-or-xxx
+# ANTHROPIC_API_KEY=sk-ant-xxx
+
+# Bot Tokens
+TELEGRAM_TOKEN=123456:ABC-xxx
+```
+
+### Channel Examples
+
+**Telegram only (default):**
+```yaml
+# config.yaml
+channels:
+  telegram:
+    enabled: true
+  whatsapp:
+    enabled: false
+```
+
+**WhatsApp only:**
+```yaml
+# config.yaml
+channels:
+  telegram:
+    enabled: false
+  whatsapp:
+    enabled: true
 ```
 
 On first run, scan the QR code shown in logs with WhatsApp on your phone.
 
-### Both Channels
+### LLM Provider Examples
 
-```env
-ENABLED_CHANNELS=telegram,whatsapp
-TELEGRAM_TOKEN=your_bot_token_here
-WHATSAPP_SESSION_DIR=/data/whatsapp
+**Ollama (local):**
+```yaml
+llm:
+  provider: ollama
+  model: llama3.2:3b
+  host: http://localhost:11434
 ```
 
-## LLM Configuration
-
-### Option 1: Ollama (local/self-hosted)
-
-```env
-LLM_PROVIDER=ollama
-OLLAMA_HOST=http://localhost:11434
-OLLAMA_MODEL=llama3.2:3b
+**OpenRouter (cloud):**
+```yaml
+llm:
+  provider: openrouter
+  model: google/gemini-2.5-pro-preview-03-25
 ```
 
-### Option 2: OpenRouter (cloud)
-
-```env
-LLM_PROVIDER=openrouter
-OPENROUTER_API_KEY=sk-or-v1-xxxxx
-OPENROUTER_MODEL=google/gemini-2.5-pro-preview-03-25
+**Anthropic:**
+```yaml
+llm:
+  provider: anthropic
+  model: claude-sonnet-4-20250514
 ```
 
 See [OpenRouter Models](https://openrouter.ai/models) for available models.

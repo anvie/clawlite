@@ -10,24 +10,59 @@ from typing import AsyncGenerator, Optional, Tuple, List, Dict, Any
 
 logger = logging.getLogger("clawlite.llm")
 
-# Provider config
-LLM_PROVIDER = os.getenv("LLM_PROVIDER", "ollama").lower()
 
-# Ollama config
-OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://localhost:11434")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.2:3b")
+# =============================================================================
+# Config helpers - read from config.yaml, secrets from env vars
+# =============================================================================
 
-# OpenRouter config
-OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
-OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "google/gemini-2.0-flash-001")
-OPENROUTER_BASE_URL = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
+def _get_config(key: str, default=None):
+    """Get config value from config.yaml."""
+    try:
+        from .config import get as config_get
+        return config_get(key, default)
+    except ImportError:
+        return default
 
-# Anthropic config
-# Credentials are resolved via auth module: instance → global → env vars
-ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-20250514")
-ANTHROPIC_BASE_URL = os.getenv("ANTHROPIC_BASE_URL", "https://api.anthropic.com")
-ANTHROPIC_EXTENDED_THINKING = os.getenv("ANTHROPIC_EXTENDED_THINKING", "true").lower() == "true"
-ANTHROPIC_THINKING_BUDGET = int(os.getenv("ANTHROPIC_THINKING_BUDGET", "10000"))
+
+def get_llm_provider() -> str:
+    """Get LLM provider from config."""
+    return str(_get_config("llm.provider", "ollama")).lower()
+
+
+def get_llm_model() -> str:
+    """Get LLM model from config."""
+    return str(_get_config("llm.model", "llama3.2:3b"))
+
+
+def get_llm_host() -> str:
+    """Get Ollama host from config."""
+    return str(_get_config("llm.host", "http://localhost:11434"))
+
+
+def get_llm_timeout() -> int:
+    """Get LLM timeout from config."""
+    return int(_get_config("llm.timeout", 60))
+
+
+def get_anthropic_extended_thinking() -> bool:
+    """Get Anthropic extended thinking setting from config."""
+    return bool(_get_config("llm.extended_thinking", True))
+
+
+def get_anthropic_thinking_budget() -> int:
+    """Get Anthropic thinking budget from config."""
+    return int(_get_config("llm.thinking_budget", 10000))
+
+
+# Secrets - always from env vars
+def get_openrouter_api_key() -> str:
+    """Get OpenRouter API key from env."""
+    return os.getenv("OPENROUTER_API_KEY", "")
+
+
+# Fixed URLs (not configurable)
+OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
+ANTHROPIC_BASE_URL = "https://api.anthropic.com"
 
 # Instance name for credential resolution (set by main.py or channel)
 _current_instance: Optional[str] = None
@@ -137,9 +172,9 @@ class LLMProvider(ABC):
 class OllamaProvider(LLMProvider):
     """Ollama LLM provider."""
     
-    def __init__(self, host: str = OLLAMA_HOST, model: str = OLLAMA_MODEL):
-        self.host = host
-        self.model = model
+    def __init__(self, host: str = None, model: str = None):
+        self.host = host or get_llm_host()
+        self.model = model or get_llm_model()
     
     async def stream_generate(
         self,
@@ -217,13 +252,13 @@ class OpenRouterProvider(LLMProvider):
     
     def __init__(
         self,
-        api_key: str = OPENROUTER_API_KEY,
-        model: str = OPENROUTER_MODEL,
-        base_url: str = OPENROUTER_BASE_URL,
+        api_key: str = None,
+        model: str = None,
+        base_url: str = None,
     ):
-        self.api_key = api_key
-        self.model = model
-        self.base_url = base_url.rstrip("/")
+        self.api_key = api_key or get_openrouter_api_key()
+        self.model = model or get_llm_model()
+        self.base_url = (base_url or OPENROUTER_BASE_URL).rstrip("/")
     
     async def stream_generate(
         self,
@@ -357,10 +392,10 @@ class AnthropicProvider(LLMProvider):
         self,
         api_key: Optional[str] = None,
         auth_token: Optional[str] = None,
-        model: str = ANTHROPIC_MODEL,
-        base_url: str = ANTHROPIC_BASE_URL,
-        extended_thinking: bool = ANTHROPIC_EXTENDED_THINKING,
-        thinking_budget: int = ANTHROPIC_THINKING_BUDGET,
+        model: str = None,
+        base_url: str = None,
+        extended_thinking: bool = None,
+        thinking_budget: int = None,
     ):
         # Resolve credentials if not explicitly provided
         if api_key is None and auth_token is None:
@@ -368,10 +403,12 @@ class AnthropicProvider(LLMProvider):
         
         self.api_key = api_key
         self.auth_token = auth_token
-        self.model = model
-        self.base_url = base_url.rstrip("/")
-        self.extended_thinking = extended_thinking
-        self.thinking_budget = thinking_budget
+        
+        # Get config values with defaults
+        self.model = model or get_llm_model()
+        self.base_url = (base_url or ANTHROPIC_BASE_URL).rstrip("/")
+        self.extended_thinking = extended_thinking if extended_thinking is not None else get_anthropic_extended_thinking()
+        self.thinking_budget = thinking_budget if thinking_budget is not None else get_anthropic_thinking_budget()
         
         # Determine auth mode
         self.use_oauth = bool(auth_token)
@@ -674,9 +711,10 @@ class AnthropicProvider(LLMProvider):
 
 def get_provider() -> LLMProvider:
     """Get the configured LLM provider."""
-    if LLM_PROVIDER == "anthropic":
+    provider = get_llm_provider()
+    if provider == "anthropic":
         return AnthropicProvider()
-    elif LLM_PROVIDER == "openrouter":
+    elif provider == "openrouter":
         return OpenRouterProvider()
     else:
         return OllamaProvider()

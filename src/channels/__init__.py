@@ -48,9 +48,21 @@ def register_channel(name: str, channel_class: Type["BaseChannel"]):
 
 
 def get_enabled_channels() -> list[str]:
-    """Get list of enabled channels from environment."""
-    enabled = os.getenv("ENABLED_CHANNELS", "telegram")
-    return [c.strip().lower() for c in enabled.split(",") if c.strip()]
+    """Get list of enabled channels from config.yaml."""
+    try:
+        from ..config import get as config_get
+        enabled = []
+        
+        # Check each channel's enabled status in config
+        if config_get("channels.telegram.enabled", True):
+            enabled.append("telegram")
+        if config_get("channels.whatsapp.enabled", False):
+            enabled.append("whatsapp")
+        
+        return enabled if enabled else ["telegram"]  # Default to telegram
+    except ImportError:
+        # Fallback if config module not available
+        return ["telegram"]
 
 
 def create_channel(name: str, agent_callback) -> "BaseChannel":

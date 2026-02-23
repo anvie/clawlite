@@ -52,14 +52,18 @@ def format_skill_prompts() -> str:
     return "\n".join(lines) if len(lines) > 1 else ""
 
 
-def load_system_prompt() -> str:
-    """Load system prompt from file, with onboarding if bot unconfigured."""
+def load_system_prompt(user_id: Optional[str] = None) -> str:
+    """Load system prompt from file, with onboarding if bot unconfigured.
+    
+    Args:
+        user_id: User ID for filtering tools by access level
+    """
     prompt_file = os.path.join(PROMPTS_DIR, "system.md")
     try:
         with open(prompt_file, "r") as f:
             prompt = f.read()
     except FileNotFoundError:
-        prompt = get_default_system_prompt()
+        prompt = get_default_system_prompt(user_id)
     
     # Add skill prompts if any skills loaded
     skill_prompts = format_skill_prompts()
@@ -78,13 +82,17 @@ def load_system_prompt() -> str:
     return prompt
 
 
-def get_default_system_prompt() -> str:
-    """Default system prompt if file not found."""
+def get_default_system_prompt(user_id: Optional[str] = None) -> str:
+    """Default system prompt if file not found.
+    
+    Args:
+        user_id: User ID for filtering tools by access level
+    """
     skill_section = format_skill_prompts()
     return f"""You are ClawLite, an agentic AI assistant running in a sandboxed Docker container.
 You can use tools to interact with the workspace filesystem and execute commands.
 
-{format_tools_for_prompt()}
+{format_tools_for_prompt(user_id)}
 {skill_section}
 
 ## Tool Calling Format
@@ -449,7 +457,8 @@ async def run_agent(
             logger.info(f"Loaded {len(history)} persisted messages for {user_id}")
     
     # Load system prompt (with onboarding if bot unconfigured)
-    system_prompt = load_system_prompt()
+    # Pass user_id to filter tools by access level
+    system_prompt = load_system_prompt(user_id)
     
     # Load user-specific context if user_id provided
     if user_id:

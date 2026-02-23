@@ -55,6 +55,39 @@ class TestToolsRegistry:
         assert "Available tools:" in formatted
         assert "read_file" in formatted
         assert "write_file" in formatted
+    
+    def test_format_tools_for_prompt_filters_by_user(self, admin_user_id, regular_user_id, monkeypatch):
+        """Should filter tools based on user access."""
+        from src.tools import format_tools_for_prompt
+        
+        # Mock config with tool restrictions
+        config_data = {"tools": {"allowed": ["read_file", "list_dir"]}}
+        
+        def mock_get(key, default=None):
+            keys = key.split(".")
+            value = config_data
+            for k in keys:
+                if isinstance(value, dict):
+                    value = value.get(k)
+                else:
+                    return default
+                if value is None:
+                    return default
+            return value
+        
+        from src import config
+        monkeypatch.setattr(config, "get", mock_get)
+        
+        # Regular user should get filtered list
+        regular_prompt = format_tools_for_prompt(regular_user_id)
+        assert "read_file" in regular_prompt
+        assert "list_dir" in regular_prompt
+        assert "write_file" not in regular_prompt  # Filtered out
+        
+        # Admin should get all tools
+        admin_prompt = format_tools_for_prompt(admin_user_id)
+        assert "read_file" in admin_prompt
+        assert "write_file" in admin_prompt  # Admin gets all tools
 
 
 class TestToolFiltering:

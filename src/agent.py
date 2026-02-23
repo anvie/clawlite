@@ -25,6 +25,19 @@ from .errors import sanitize_error, format_user_error
 
 logger = logging.getLogger("clawlite.agent")
 
+
+def strip_thinking_tags(text: str) -> str:
+    """Strip <thought>...</thought> or <thinking>...</thinking> tags from response.
+    
+    Some models (like qwen3) output thinking in tags that shouldn't be shown to users.
+    """
+    # Remove <thought>...</thought> (single line or multiline)
+    text = re.sub(r'<thought>.*?</thought>\s*', '', text, flags=re.DOTALL | re.IGNORECASE)
+    # Remove <thinking>...</thinking>
+    text = re.sub(r'<thinking>.*?</thinking>\s*', '', text, flags=re.DOTALL | re.IGNORECASE)
+    return text.strip()
+
+
 # Load system prompt
 PROMPTS_DIR = os.path.join(os.path.dirname(__file__), "..", "prompts")
 
@@ -375,6 +388,9 @@ async def _run_agent_native_tools(
     
     # Finalize response
     final_response = accumulated_text.strip()
+    
+    # Strip thinking tags (some models like qwen3 output <thought>...</thought>)
+    final_response = strip_thinking_tags(final_response)
     
     # Fallback if empty
     if not final_response and last_tool_result:

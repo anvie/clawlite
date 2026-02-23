@@ -6,8 +6,8 @@ from .base import Tool, ToolResult, WORKSPACE
 
 class ReadFileTool(Tool):
     name = "read_file"
-    description = "Read contents of a file from workspace"
-    parameters = {"path": "string - relative path to file"}
+    description = "Read contents of a file. Regular users: workspace only. Admin/owner: any path."
+    parameters = {"path": "string - relative path to file (or absolute for admin)"}
     
     async def execute(self, path: str = "", **kwargs) -> ToolResult:
         try:
@@ -36,9 +36,9 @@ class ReadFileTool(Tool):
 
 class WriteFileTool(Tool):
     name = "write_file"
-    description = "Write or create a file in workspace"
+    description = "Write or create a file. Regular users: workspace only. Admin/owner: any path."
     parameters = {
-        "path": "string - relative path to file",
+        "path": "string - relative path to file (or absolute for admin)",
         "content": "string - content to write"
     }
     
@@ -69,9 +69,10 @@ class WriteFileTool(Tool):
 class EditFileTool(Tool):
     name = "edit_file"
     description = """Edit a file using search/replace or append. More token-efficient than write_file for small changes.
-    
+Regular users: workspace only. Admin/owner: any path.
+
 Modes:
-1. Search/replace: provide old_text and new_text (old_text must match exactly)
+1. Search/replace: provide old_text and new_text (old_text must match exactly once)
 2. Append: set append=true to add content at end of file
 3. Prepend: set prepend=true to add content at beginning of file"""
     

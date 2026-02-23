@@ -140,9 +140,15 @@ def get_all_tools(user_id: Optional[str] = None) -> dict[str, Tool]:
 
 
 def get_tool(name: str, user_id: Optional[str] = None) -> Optional[Tool]:
-    """Get a tool by name, with user-scoped tools if user_id provided."""
+    """Get a tool by name, with user-scoped tools if user_id provided.
+    
+    Sets user_id on the tool for access control (e.g., file path validation).
+    """
     all_tools = get_all_tools(user_id)
-    return all_tools.get(name)
+    tool = all_tools.get(name)
+    if tool and user_id:
+        tool.user_id = user_id  # Set for path validation access control
+    return tool
 
 
 def list_tools(user_id: Optional[str] = None) -> list[dict]:

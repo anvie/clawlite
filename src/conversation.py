@@ -66,6 +66,7 @@ def append_message(
     content: str,
     tool_calls: Optional[list] = None,
     tool_results: Optional[list] = None,
+    thinking: Optional[str] = None,
 ) -> bool:
     """
     Append a message to today's conversation file.
@@ -76,6 +77,7 @@ def append_message(
         content: Message content
         tool_calls: Optional list of tool calls made
         tool_results: Optional list of tool results
+        thinking: Optional CoT/reasoning content (for debugging)
     
     Returns:
         True if saved successfully, False otherwise
@@ -100,6 +102,8 @@ def append_message(
             record["tool_calls"] = tool_calls
         if tool_results:
             record["tool_results"] = tool_results
+        if thinking:
+            record["thinking"] = thinking
         
         # Append to file
         with open(convo_file, "a", encoding="utf-8") as f:

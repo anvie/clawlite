@@ -427,10 +427,18 @@ async def _run_agent_native_tools(
         messages.append(build_tool_result_message(tool_results))
     
     # Finalize response
-    final_response = accumulated_text.strip()
+    raw_response = accumulated_text.strip()  # Keep original with thinking for debug
     
-    # Strip thinking tags (some models like qwen3 output <thought>...</thought>)
-    final_response = strip_thinking_tags(final_response)
+    # Extract thinking content before stripping (for conversation log)
+    thinking_content = None
+    thought_match = re.search(r'<thought>([\s\S]*?)</thought>', raw_response, re.IGNORECASE)
+    if thought_match:
+        thinking_content = thought_match.group(1).strip()
+    elif thinking_buffer:  # Use buffered thinking if available
+        thinking_content = thinking_buffer.strip()
+    
+    # Strip thinking tags for user-facing response
+    final_response = strip_thinking_tags(raw_response)
     
     # Fallback if empty
     if not final_response and last_tool_result:
@@ -462,7 +470,7 @@ async def _run_agent_native_tools(
             from .conversation import append_message, is_enabled
             if is_enabled():
                 append_message(user_id, "user", user_message)
-                append_message(user_id, "assistant", final_response)
+                append_message(user_id, "assistant", final_response, thinking=thinking_content)
         except Exception as e:
             logger.warning(f"Failed to save conversation: {e}")
     
@@ -758,10 +766,18 @@ async def run_agent(
             break
     
     # Translate response back to Indonesian if translation is enabled
-    final_response = accumulated_response
+    raw_response_text = accumulated_response
+    
+    # Extract thinking content before stripping (for conversation log)
+    thinking_content_text = None
+    thought_match = re.search(r'<thought>([\s\S]*?)</thought>', raw_response_text, re.IGNORECASE)
+    if thought_match:
+        thinking_content_text = thought_match.group(1).strip()
+    elif current_thinking:  # Use accumulated thinking if available
+        thinking_content_text = current_thinking.strip()
     
     # Strip all thinking tags and tool call leaks
-    final_response = strip_thinking_tags(final_response)
+    final_response = strip_thinking_tags(raw_response_text)
     
     # Additional cleanup for tool-related tags
     final_response = re.sub(r'</?tool_?result>', '', final_response, flags=re.IGNORECASE)
@@ -797,7 +813,7 @@ async def run_agent(
             from .conversation import append_message, is_enabled
             if is_enabled():
                 append_message(user_id, "user", user_message)
-                append_message(user_id, "assistant", final_response)
+                append_message(user_id, "assistant", final_response, thinking=thinking_content_text)
         except Exception as e:
             logger.warning(f"Failed to save conversation: {e}")
     

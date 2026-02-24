@@ -5,7 +5,7 @@ from typing import Optional
 
 from .base import Tool, ToolResult
 from .file_ops import ReadFileTool, WriteFileTool, EditFileTool, ListDirTool
-from .shell import ExecTool, RunBashTool, RunPythonTool, KillProcessTool, ListProcessesTool
+from .shell import ExecTool, RunBashTool
 from .search import GrepTool, FindFilesTool
 from .cron import ListCronTool, AddCronTool, RemoveCronTool
 from .memory import MemoryLogTool, MemoryReadTool, MemoryUpdateTool, UserUpdateTool
@@ -103,14 +103,14 @@ def get_user_tools(user_id: str) -> dict[str, Tool]:
         memory_update = MemoryUpdateTool()
         memory_update.user_id = user_id
         
-        user_update = UserUpdateTool()
-        user_update.user_id = user_id
+        # user_update = UserUpdateTool()
+        # user_update.user_id = user_id
         
         _user_tools_cache[user_id] = {
             "memory_log": memory_log,
             "memory_read": memory_read,
             "memory_update": memory_update,
-            "user_update": user_update,
+            # "user_update": user_update,
         }
     
     return _user_tools_cache[user_id]

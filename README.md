@@ -254,7 +254,6 @@ See [OpenRouter Models](https://openrouter.ai/models) for available models.
 | `memory_log`    | Append to today's daily log    | `content`                     |
 | `memory_read`   | Read MEMORY.md or specific day | `date` (optional, YYYY-MM-DD) |
 | `memory_update` | Append to long-term memory     | `content`                     |
-| `user_update`   | Update user profile            | `content`                     |
 
 ### Web
 

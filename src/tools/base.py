@@ -2,7 +2,7 @@
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Optional
 import os
 import logging
 
@@ -27,7 +27,7 @@ def _is_admin_user(user_id: Optional[str]) -> bool:
 class ToolResult:
     """Result from a tool execution."""
     success: bool
-    output: str
+    output: Optional[str] = None
     error: Optional[str] = None
     file_data: Optional[dict] = None  # For file responses (skills)
 

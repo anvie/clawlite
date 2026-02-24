@@ -209,5 +209,5 @@ MEMORY_TOOLS = [
     MemoryLogTool(),
     MemoryReadTool(),
     MemoryUpdateTool(),
-    UserUpdateTool(),
+    # UserUpdateTool(),
 ]

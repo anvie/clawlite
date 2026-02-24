@@ -181,7 +181,7 @@ class TestUserScopedTools:
         assert "memory_log" in tools
         assert "memory_read" in tools
         assert "memory_update" in tools
-        assert "user_update" in tools
+        # assert "user_update" in tools
     
     def test_user_tools_have_user_id_set(self):
         """User-scoped tools should have user_id set."""

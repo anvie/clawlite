@@ -14,5 +14,3 @@ This bot has not been configured yet. Please help the user set up the bot's iden
 ```
 
 Keep it conversational. After saving, confirm the setup is complete.
-
-Note: Users can update SOUL.md anytime later using `write_file` or by asking you to modify it.

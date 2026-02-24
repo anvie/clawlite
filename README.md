@@ -48,6 +48,7 @@ nano .env
 ```
 
 The setup script will:
+
 - Create `.env` from `.env.example`
 - Copy templates to `workspace/`
 - Create necessary directories
@@ -95,6 +96,7 @@ ClawLite provides a unified CLI for managing instances and templates:
 ## Configuration
 
 ClawLite uses two config files:
+
 - **`config.yaml`** - All settings (LLM, channels, access control, etc.)
 - **`.env`** - Secrets only (API keys, tokens)
 
@@ -103,15 +105,15 @@ ClawLite uses two config files:
 ```yaml
 # LLM settings
 llm:
-  provider: openrouter  # ollama | openrouter | anthropic
+  provider: openrouter # ollama | openrouter | anthropic
   model: google/gemini-2.0-flash-001
-  host: http://localhost:11434  # for ollama only
+  host: http://localhost:11434 # for ollama only
   timeout: 60
 
 # Access control
 access:
-  allowed_users: []  # empty = everyone allowed
-  admins: [tg_123456]  # bypass all restrictions
+  allowed_users: [] # empty = everyone allowed
+  admins: [tg_123456] # bypass all restrictions
 
 # Channel settings
 channels:
@@ -153,6 +155,7 @@ TELEGRAM_TOKEN=123456:ABC-xxx
 ### Channel Examples
 
 **Telegram only (default):**
+
 ```yaml
 # config.yaml
 channels:
@@ -163,6 +166,7 @@ channels:
 ```
 
 **WhatsApp only:**
+
 ```yaml
 # config.yaml
 channels:
@@ -177,6 +181,7 @@ On first run, scan the QR code shown in logs with WhatsApp on your phone.
 ### LLM Provider Examples
 
 **Ollama (local):**
+
 ```yaml
 llm:
   provider: ollama
@@ -185,6 +190,7 @@ llm:
 ```
 
 **OpenRouter (cloud):**
+
 ```yaml
 llm:
   provider: openrouter
@@ -192,6 +198,7 @@ llm:
 ```
 
 **Anthropic:**
+
 ```yaml
 llm:
   provider: anthropic
@@ -204,14 +211,15 @@ See [OpenRouter Models](https://openrouter.ai/models) for available models.
 
 ### File Operations
 
-| Tool | Description | Parameters |
-|------|-------------|------------|
-| `read_file` | Read file contents | `path` |
-| `write_file` | Create/overwrite file | `path`, `content` |
-| `edit_file` | Edit file (search/replace or append) | `path`, `old_text`, `new_text` or `content`, `append` |
-| `list_dir` | List directory contents | `path` (default: `.`) |
+| Tool         | Description                          | Parameters                                            |
+| ------------ | ------------------------------------ | ----------------------------------------------------- |
+| `read_file`  | Read file contents                   | `path`                                                |
+| `write_file` | Create/overwrite file                | `path`, `content`                                     |
+| `edit_file`  | Edit file (search/replace or append) | `path`, `old_text`, `new_text` or `content`, `append` |
+| `list_dir`   | List directory contents              | `path` (default: `.`)                                 |
 
 **`edit_file` modes:**
+
 - **Replace:** `edit_file(path, old_text="find this", new_text="replace with")` — old_text must match exactly once
 - **Append:** `edit_file(path, content="add this", append=true)`
 - **Prepend:** `edit_file(path, content="add this", prepend=true)`
@@ -219,44 +227,41 @@ See [OpenRouter Models](https://openrouter.ai/models) for available models.
 
 ### Shell Operations
 
-| Tool | Description | Parameters |
-|------|-------------|------------|
-| `exec` | Execute allowed commands (cat, ls, grep, find, echo, date, head, tail, wc, curl) | `command` |
-| `run_bash` | Run a bash script | `script` |
-| `run_python` | Execute Python code | `code` |
-| `list_processes` | List running processes | - |
-| `kill_process` | Terminate a process | `target` (PID or name) |
+| Tool       | Description                                                                      | Parameters |
+| ---------- | -------------------------------------------------------------------------------- | ---------- |
+| `exec`     | Execute allowed commands (cat, ls, grep, find, echo, date, head, tail, wc, curl) | `command`  |
+| `run_bash` | Run a bash script                                                                | `script`   |
 
 ### Search
 
-| Tool | Description | Parameters |
-|------|-------------|------------|
-| `grep` | Search text in files (ripgrep) | `pattern`, `path`, `flags` (-i, -w, -l, -c) |
-| `find_files` | Find files by glob pattern | `name_pattern`, `path`, `recursive`, `type` |
+| Tool         | Description                    | Parameters                                  |
+| ------------ | ------------------------------ | ------------------------------------------- |
+| `grep`       | Search text in files (ripgrep) | `pattern`, `path`, `flags` (-i, -w, -l, -c) |
+| `find_files` | Find files by glob pattern     | `name_pattern`, `path`, `recursive`, `type` |
 
 ### Scheduling
 
-| Tool | Description | Parameters |
-|------|-------------|------------|
-| `list_cron` | List cron jobs | - |
-| `add_cron` | Add a cron job | `schedule`, `command`, `comment` |
-| `remove_cron` | Remove a cron job | `pattern` |
+| Tool          | Description       | Parameters                       |
+| ------------- | ----------------- | -------------------------------- |
+| `list_cron`   | List cron jobs    | -                                |
+| `add_cron`    | Add a cron job    | `schedule`, `command`, `comment` |
+| `remove_cron` | Remove a cron job | `pattern`                        |
 
 ### Memory (User-Scoped)
 
-| Tool | Description | Parameters |
-|------|-------------|------------|
-| `memory_log` | Append to today's daily log | `content` |
-| `memory_read` | Read MEMORY.md or specific day | `date` (optional, YYYY-MM-DD) |
-| `memory_update` | Append to long-term memory | `content` |
-| `user_update` | Update user profile | `content` |
+| Tool            | Description                    | Parameters                    |
+| --------------- | ------------------------------ | ----------------------------- |
+| `memory_log`    | Append to today's daily log    | `content`                     |
+| `memory_read`   | Read MEMORY.md or specific day | `date` (optional, YYYY-MM-DD) |
+| `memory_update` | Append to long-term memory     | `content`                     |
+| `user_update`   | Update user profile            | `content`                     |
 
 ### Web
 
-| Tool | Description | Parameters |
-|------|-------------|------------|
-| `web_search` | Search the web (DuckDuckGo) | `query`, `max_results` |
-| `web_fetch` | Extract readable content from URL | `url`, `max_chars` |
+| Tool         | Description                       | Parameters             |
+| ------------ | --------------------------------- | ---------------------- |
+| `web_search` | Search the web (DuckDuckGo)       | `query`, `max_results` |
+| `web_fetch`  | Extract readable content from URL | `url`, `max_chars`     |
 
 ## Internal API
 
@@ -264,11 +269,11 @@ ClawLite runs an internal HTTP API on port 8080 for cron jobs and external integ
 
 ### Endpoints
 
-| Method | Path | Description |
-|--------|------|-------------|
-| `POST` | `/api/send` | Send message to user |
+| Method | Path          | Description                          |
+| ------ | ------------- | ------------------------------------ |
+| `POST` | `/api/send`   | Send message to user                 |
 | `POST` | `/api/prompt` | Run agent with prompt, send response |
-| `GET` | `/api/health` | Health check |
+| `GET`  | `/api/health` | Health check                         |
 
 ### Usage
 
@@ -329,13 +334,14 @@ ClawLite supports creating multiple isolated instances from templates.
 
 Templates are resolved in this order:
 
-| Pattern | Resolution |
-|---------|------------|
-| `./my-template` | Local directory |
-| `user/name` | `github.com/user/name-clawlite-tmpl` |
-| `name` | `github.com/$CLAWLITE_TEMPLATE_NAMESPACE/name-clawlite-tmpl` |
+| Pattern         | Resolution                                                   |
+| --------------- | ------------------------------------------------------------ |
+| `./my-template` | Local directory                                              |
+| `user/name`     | `github.com/user/name-clawlite-tmpl`                         |
+| `name`          | `github.com/$CLAWLITE_TEMPLATE_NAMESPACE/name-clawlite-tmpl` |
 
 Set your default namespace:
+
 ```bash
 export CLAWLITE_TEMPLATE_NAMESPACE=myorg
 ```
@@ -392,6 +398,7 @@ my-template-clawlite-tmpl/
 ```
 
 **template.yaml:**
+
 ```yaml
 name: my-template
 version: "1.0"
@@ -402,7 +409,7 @@ variables:
     description: Name of the bot
     required: true
     example: "MyBot"
-  
+
   API_KEY:
     description: API key for external service
     required: false
@@ -420,12 +427,12 @@ Use `{{VARIABLE_NAME}}` placeholders in template files. The wizard replaces them
 
 The `workspace/` directory contains configuration and user data:
 
-| File | Purpose | Scope |
-|------|---------|-------|
-| `SOUL.md` | Bot persona and communication style | Shared |
-| `AGENTS.md` | Bot rules and behavior guidelines | Shared |
-| `TOOLS.md` | Tool notes, servers, common commands | Shared |
-| `users/{id}/` | Per-user memory and preferences | Per-user |
+| File          | Purpose                              | Scope    |
+| ------------- | ------------------------------------ | -------- |
+| `SOUL.md`     | Bot persona and communication style  | Shared   |
+| `AGENTS.md`   | Bot rules and behavior guidelines    | Shared   |
+| `TOOLS.md`    | Tool notes, servers, common commands | Shared   |
+| `users/{id}/` | Per-user memory and preferences      | Per-user |
 
 Copy templates to get started:
 
@@ -453,6 +460,7 @@ workspace/
 ```
 
 **How it works:**
+
 - Shared files (`SOUL.md`, `AGENTS.md`) define the bot's personality and rules
 - User folders are auto-created on first message
 - Memory tools read/write to the user's own folder
@@ -461,6 +469,7 @@ workspace/
 ## First-Time Bot Setup
 
 On first conversation (when `SOUL.md` contains `_UNCONFIGURED_`), the bot will:
+
 1. Ask what to call itself (bot name)
 2. Ask about its role (personal assistant, work helper, etc.)
 3. Ask about preferred tone (casual, professional, etc.)
@@ -479,40 +488,40 @@ After setup, users can still modify `SOUL.md` anytime by asking the bot or using
 
 ### config.yaml (main configuration)
 
-| Key | Description | Default |
-|-----|-------------|---------|
-| `llm.provider` | LLM provider (`ollama`, `openrouter`, `anthropic`) | `ollama` |
-| `llm.model` | Model name/ID | `llama3.2:3b` |
-| `llm.host` | Ollama server URL (ollama only) | `http://localhost:11434` |
-| `llm.timeout` | Request timeout in seconds | `60` |
-| `channels.telegram.enabled` | Enable Telegram channel | `true` |
-| `channels.whatsapp.enabled` | Enable WhatsApp channel | `false` |
-| `channels.whatsapp.session_dir` | WhatsApp session storage | `/data/whatsapp` |
-| `access.allowed_users` | Allowed user IDs (empty = all) | `[]` |
-| `access.admins` | Admin user IDs (bypass restrictions) | `[]` |
-| `agent.max_iterations` | Max tool calls per turn | `10` |
-| `agent.tool_timeout` | Seconds per tool execution | `30` |
-| `tools.allowed` | Allowed tools (empty = all) | `[]` |
-| `conversation.record` | Save conversations to files | `true` |
-| `conversation.retention_days` | Auto-delete old files | `7` |
-| `api.port` | Internal API server port | `8080` |
-| `logging.level` | Log level | `INFO` |
+| Key                             | Description                                        | Default                  |
+| ------------------------------- | -------------------------------------------------- | ------------------------ |
+| `llm.provider`                  | LLM provider (`ollama`, `openrouter`, `anthropic`) | `ollama`                 |
+| `llm.model`                     | Model name/ID                                      | `llama3.2:3b`            |
+| `llm.host`                      | Ollama server URL (ollama only)                    | `http://localhost:11434` |
+| `llm.timeout`                   | Request timeout in seconds                         | `60`                     |
+| `channels.telegram.enabled`     | Enable Telegram channel                            | `true`                   |
+| `channels.whatsapp.enabled`     | Enable WhatsApp channel                            | `false`                  |
+| `channels.whatsapp.session_dir` | WhatsApp session storage                           | `/data/whatsapp`         |
+| `access.allowed_users`          | Allowed user IDs (empty = all)                     | `[]`                     |
+| `access.admins`                 | Admin user IDs (bypass restrictions)               | `[]`                     |
+| `agent.max_iterations`          | Max tool calls per turn                            | `10`                     |
+| `agent.tool_timeout`            | Seconds per tool execution                         | `30`                     |
+| `tools.allowed`                 | Allowed tools (empty = all)                        | `[]`                     |
+| `conversation.record`           | Save conversations to files                        | `true`                   |
+| `conversation.retention_days`   | Auto-delete old files                              | `7`                      |
+| `api.port`                      | Internal API server port                           | `8080`                   |
+| `logging.level`                 | Log level                                          | `INFO`                   |
 
 ### .env (secrets only)
 
-| Variable | Description |
-|----------|-------------|
-| `TELEGRAM_TOKEN` | Bot token from @BotFather |
-| `OPENROUTER_API_KEY` | OpenRouter API key |
-| `ANTHROPIC_API_KEY` | Anthropic API key |
+| Variable               | Description                         |
+| ---------------------- | ----------------------------------- |
+| `TELEGRAM_TOKEN`       | Bot token from @BotFather           |
+| `OPENROUTER_API_KEY`   | OpenRouter API key                  |
+| `ANTHROPIC_API_KEY`    | Anthropic API key                   |
 | `ANTHROPIC_AUTH_TOKEN` | Anthropic OAuth token (alternative) |
 
 ### Infrastructure (Docker runtime)
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `WORKSPACE_PATH` | Workspace directory mount | `/workspace` |
-| `SKILLS_DIR` | Skills directory mount | `/app/skills` |
+| Variable         | Description               | Default       |
+| ---------------- | ------------------------- | ------------- |
+| `WORKSPACE_PATH` | Workspace directory mount | `/workspace`  |
+| `SKILLS_DIR`     | Skills directory mount    | `/app/skills` |
 
 ## Security (Docker mode)
 
@@ -532,6 +541,7 @@ When running in Docker, additional security constraints apply:
 If Ollama runs on a different machine:
 
 **Set in config.yaml:**
+
 ```yaml
 llm:
   provider: ollama
@@ -540,25 +550,30 @@ llm:
 ```
 
 **Docker mode:** Also update `docker-compose.yml` if needed:
+
 ```yaml
 extra_hosts:
   - "ollama-host:192.168.1.100"
 ```
+
 Then use `host: http://ollama-host:11434` in config.yaml.
 
 ## Recommended Models
 
 **OpenRouter (cloud):**
+
 - `google/gemini-2.5-pro-preview-03-25` - Excellent reasoning, tool use
 - `anthropic/claude-sonnet-4` - Great for agentic tasks
 - `openai/gpt-4o` - Good all-rounder
 
 **Ollama (local) - Reasoning models:**
+
 - `nanbeige4.1:q8` - Chinese reasoning model
 - `deepseek-r1:8b` - Good reasoning capability
 - `qwq:32b` - Excellent for complex tasks
 
 **Ollama (local) - General purpose:**
+
 - `llama3.2:3b` - Fast and lightweight
 - `mistral:7b` - Good balance
 

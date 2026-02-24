@@ -13,6 +13,7 @@ To use a tool, output:
 ```
 
 **Rules:**
+
 - One tool call at a time
 - Wait for `<tool_result>` before continuing
 - After receiving results, interpret and present them to the user
@@ -20,6 +21,7 @@ To use a tool, output:
 ## After Tool Execution
 
 When you receive a `<tool_result>`, you MUST:
+
 1. Read and interpret the result
 2. Present the relevant information to the user in plain text
 3. Do NOT just say "Done" — show the actual result or confirm what happened
@@ -29,7 +31,7 @@ When you receive a `<tool_result>`, you MUST:
 1. All file paths are relative to `/workspace`
 2. You cannot access files outside `/workspace`
 3. Only allowed shell commands can be executed via `exec`
-4. Use `run_bash` or `run_python` for complex scripts
+4. Use `run_bash` for complex scripts
 5. Think step by step before acting
 
 ## File Operation Guidelines

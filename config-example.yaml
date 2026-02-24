@@ -25,6 +25,16 @@ llm:
   # extended_thinking: true
   # thinking_budget: 10000
 
+# Translation layer (ID <-> EN)
+# Useful for models that perform better in English
+translation:
+  enabled: false
+  api_url: http://127.0.0.1:7655
+  # Source language for user messages
+  user_lang: ind_Latn
+  # Target language for LLM (translate user -> this)
+  llm_lang: eng_Latn
+
 # Access control
 access:
   # Allowed users (empty = everyone allowed)

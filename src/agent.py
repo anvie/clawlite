@@ -18,7 +18,7 @@ from .llm import (
     ToolResult as LLMToolResult,
 )
 from .tools import get_tool, format_tools_for_prompt, list_tools, SKILL_TOOLS
-from .translation import translate_to_english, translate_to_indonesian, TRANSLATION_ENABLED
+from .translation import translate_to_english, translate_to_indonesian, is_translation_enabled
 from .context import load_full_context, ensure_user_dir, is_bot_unconfigured, load_conversation_history
 from .config import get as config_get
 from .errors import sanitize_error, format_user_error
@@ -241,6 +241,15 @@ async def _run_agent_native_tools(
     start_time = start_time or time.time()
     logger.info(f"Running agent with native tools for user {user_id}")
     
+    # Translate user message if translation is enabled
+    processed_message = user_message
+    if is_translation_enabled():
+        try:
+            processed_message = await translate_to_english(user_message)
+            logger.debug(f"Translated user message: {user_message[:50]}... -> {processed_message[:50]}...")
+        except Exception as e:
+            logger.warning(f"User message translation failed, using original: {e}")
+    
     # Get available tools and convert to Anthropic format
     available_tools = list_tools(user_id)
     anthropic_tools = convert_tools_to_anthropic_format(available_tools)
@@ -255,6 +264,7 @@ async def _run_agent_native_tools(
         })
     
     # Add current user message (with images if provided)
+    # Use processed_message (translated if enabled) for LLM
     if images:
         content = []
         for img_base64 in images:
@@ -269,10 +279,10 @@ async def _run_agent_native_tools(
                 "type": "image",
                 "source": {"type": "base64", "media_type": mime, "data": img_base64}
             })
-        content.append({"type": "text", "text": user_message})
+        content.append({"type": "text", "text": processed_message})
         messages.append({"role": "user", "content": content})
     else:
-        messages.append({"role": "user", "content": user_message})
+        messages.append({"role": "user", "content": processed_message})
     
     iterations = 0
     accumulated_text = ""
@@ -449,7 +459,7 @@ async def _run_agent_native_tools(
             final_response = f"Error: {last_tool_result['result']}"
     
     # Translate if enabled
-    if TRANSLATION_ENABLED:
+    if is_translation_enabled():
         try:
             final_response = await translate_to_indonesian(final_response)
         except Exception as e:
@@ -594,7 +604,7 @@ async def run_agent(
     
     # Translate user message if translation is enabled
     processed_message = user_message
-    if TRANSLATION_ENABLED:
+    if is_translation_enabled():
         try:
             processed_message = await translate_to_english(user_message)
         except Exception as e:
@@ -790,7 +800,7 @@ async def run_agent(
         else:
             final_response = f"Error: {last_tool_result['result']}"
     
-    if TRANSLATION_ENABLED:
+    if is_translation_enabled():
         try:
             final_response = await translate_to_indonesian(final_response)
         except Exception as e:

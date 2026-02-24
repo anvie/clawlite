@@ -1,11 +1,73 @@
-"""Context loader with user isolation."""
+"""Context loader with user isolation and mtime-based caching."""
 
 import os
+import threading
+from dataclasses import dataclass
 from datetime import date, timedelta
 from pathlib import Path
-from typing import Optional
+from typing import Dict, Optional
 
 WORKSPACE_DIR = os.environ.get("WORKSPACE_DIR", "/workspace")
+
+
+# --- mtime-based file cache ---
+
+@dataclass
+class CachedFile:
+    """Cached file content with modification time."""
+    mtime: float
+    content: str
+
+
+_cache: Dict[str, CachedFile] = {}
+_cache_lock = threading.Lock()
+
+
+def read_file_cached(path: Path) -> Optional[str]:
+    """
+    Read file with mtime-based caching.
+    
+    Only performs disk read if file has been modified since last cache.
+    Returns None if file doesn't exist.
+    """
+    try:
+        if not path.exists():
+            # Remove from cache if file was deleted
+            path_str = str(path)
+            with _cache_lock:
+                _cache.pop(path_str, None)
+            return None
+        
+        path_str = str(path)
+        current_mtime = path.stat().st_mtime
+        
+        with _cache_lock:
+            if path_str in _cache:
+                cached = _cache[path_str]
+                if cached.mtime == current_mtime:
+                    return cached.content  # Cache HIT
+            
+            # Cache MISS — reload from disk
+            content = path.read_text()
+            _cache[path_str] = CachedFile(mtime=current_mtime, content=content)
+            return content
+    except Exception:
+        return None
+
+
+def get_cache_stats() -> dict:
+    """Return cache statistics for debugging."""
+    with _cache_lock:
+        return {
+            "entries": len(_cache),
+            "files": list(_cache.keys())
+        }
+
+
+def clear_cache() -> None:
+    """Clear the file cache."""
+    with _cache_lock:
+        _cache.clear()
 
 
 def get_user_dir(user_id: str) -> Path:
@@ -63,7 +125,7 @@ def load_shared_context() -> str:
     
     # Shared files in order: Identity → Rules → Domain → Tools (notes only)
     for filename in ["SOUL.md", "AGENTS.md", "CONTEXT.md", "TOOLS.md"]:
-        content = read_file_safe(workspace / filename)
+        content = read_file_cached(workspace / filename)
         if content:
             parts.append(f"## {filename}\n\n{content}")
     
@@ -76,12 +138,12 @@ def load_user_context(user_id: str) -> str:
     parts = []
     
     # User info
-    user_md = read_file_safe(user_dir / "USER.md")
+    user_md = read_file_cached(user_dir / "USER.md")
     if user_md:
         parts.append(f"## USER.md (Info tentang user ini)\n\n{user_md}")
     
     # Long-term memory
-    memory_md = read_file_safe(user_dir / "MEMORY.md")
+    memory_md = read_file_cached(user_dir / "MEMORY.md")
     if memory_md:
         parts.append(f"## MEMORY.md (Long-term memory)\n\n{memory_md}")
     
@@ -92,7 +154,7 @@ def load_user_context(user_id: str) -> str:
     
     for d in [yesterday, today]:
         daily_file = memory_dir / f"{d.isoformat()}.md"
-        content = read_file_safe(daily_file)
+        content = read_file_cached(daily_file)
         if content:
             parts.append(f"## Daily Log: {d.isoformat()}\n\n{content}")
     

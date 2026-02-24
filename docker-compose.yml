@@ -39,6 +39,8 @@ services:
       - /run:size=10m
     
     # Network - needs access to Ollama and Telegram API
-    # Add extra_hosts if Ollama is on a different machine:
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    # Add more hosts if needed:
     # extra_hosts:
     #   - "ollama-host:192.168.1.100"

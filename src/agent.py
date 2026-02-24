@@ -792,13 +792,49 @@ async def run_agent(
     final_response = re.sub(r'</?tool_?result>', '', final_response, flags=re.IGNORECASE)
     final_response = final_response.strip()
     
-    # Fallback: if response is empty (was only tool calls), include last tool result
+    # Forced continuation: if response is empty after tool execution, force LLM to interpret
     if not final_response and last_tool_result:
-        logger.info("Response was empty, falling back to last tool result")
-        if last_tool_result["success"]:
-            final_response = f"Result:\n```\n{last_tool_result['result']}\n```"
-        else:
-            final_response = f"Error: {last_tool_result['result']}"
+        logger.info("Response was empty after tool execution, forcing continuation...")
+        
+        # Build continuation prompt with explicit instruction
+        continuation_instruction = (
+            "\n\n[System: You just executed a tool and received the result above. "
+            "Now you MUST interpret this result and respond to the user in plain language. "
+            "Summarize what the tool found or did. Do NOT call any more tools. "
+            "Do NOT output empty response. Respond naturally as if explaining to the user.]"
+        )
+        continuation_prompt = full_prompt + continuation_instruction + "\n\nassistant\n"
+        
+        try:
+            # Run one more LLM call to get interpretation
+            continuation_response = ""
+            async for token, is_thinking, _ in stream_with_retry(continuation_prompt):
+                if not is_thinking:
+                    continuation_response += token
+            
+            # Clean up the continuation response
+            continuation_response = strip_thinking_tags(continuation_response)
+            continuation_response = re.sub(r'</?tool_?result>', '', continuation_response, flags=re.IGNORECASE)
+            continuation_response = continuation_response.strip()
+            
+            if continuation_response:
+                logger.info(f"Forced continuation succeeded, got {len(continuation_response)} chars")
+                final_response = continuation_response
+            else:
+                # Still empty, fall back to raw result
+                logger.warning("Forced continuation still empty, falling back to raw result")
+                if last_tool_result["success"]:
+                    final_response = f"Result:\n```\n{last_tool_result['result']}\n```"
+                else:
+                    final_response = f"Error: {last_tool_result['result']}"
+                    
+        except Exception as e:
+            logger.error(f"Forced continuation failed: {e}")
+            # Fall back to raw result
+            if last_tool_result["success"]:
+                final_response = f"Result:\n```\n{last_tool_result['result']}\n```"
+            else:
+                final_response = f"Error: {last_tool_result['result']}"
     
     if is_translation_enabled():
         try:

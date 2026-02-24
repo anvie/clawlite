@@ -7,7 +7,7 @@ import os
 import base64
 import logging
 from datetime import datetime
-from typing import Optional, Callable
+from typing import Optional
 
 from telegram import Update
 from telegram.ext import (
@@ -137,6 +137,8 @@ class TelegramChannel(BaseChannel):
             from ..conversation import clear_today, is_enabled
             if is_enabled():
                 clear_today(user_id)
+                await self._handle_clear(user_id)
+
         except Exception as e:
             self.logger.warning(f"Failed to clear persisted conversation: {e}")
         
@@ -326,7 +328,7 @@ class TelegramChannel(BaseChannel):
             
         except Exception as e:
             self.logger.error(f"Failed to send file: {e}")
-            await status_msg.edit_text(f"❌ Gagal mengirim file. Coba lagi.")
+            await status_msg.edit_text("❌ Gagal mengirim file. Coba lagi.")
     
     async def _send_chunked(
         self,
@@ -394,7 +396,7 @@ class TelegramChannel(BaseChannel):
             
         except Exception as e:
             self.logger.error(f"Error handling photo from {user_id}: {e}")
-            await update.message.reply_text(f"❌ Gagal memproses gambar. Coba lagi.")
+            await update.message.reply_text("❌ Gagal memproses gambar. Coba lagi.")
     
     async def _handle_document(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle document messages."""
@@ -441,4 +443,4 @@ class TelegramChannel(BaseChannel):
             
         except Exception as e:
             self.logger.error(f"Error handling document from {user_id}: {e}")
-            await update.message.reply_text(f"❌ Gagal memproses file. Coba lagi.")
+            await update.message.reply_text("❌ Gagal memproses file. Coba lagi.")

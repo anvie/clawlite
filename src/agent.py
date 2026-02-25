@@ -697,26 +697,33 @@ async def run_agent(
         tool_call_match = None
         tool_json = None
         
-        # Format 1: <tool_call>{"tool": "x", "args": {}}</tool_call>
-        match = re.search(r'<tool_?call>\s*(\{[\s\S]*?\})\s*</tool_?call>', search_text, re.IGNORECASE)
+        # Format 1: <tool_call>{"tool": "x", "args": {...}}</tool_call> (requires closing tag)
+        match = re.search(r'<tool_?call>\s*(\{[\s\S]*?"args"\s*:\s*\{[\s\S]*?\}[\s\S]*?\})\s*</tool_?call>', search_text, re.IGNORECASE)
         if match:
             tool_call_match = match
         
-        # Format 2: <toolcall/> followed by JSON (self-closing)
+        # Format 2: <toolcall/> followed by complete JSON with args
         if not tool_call_match:
-            match = re.search(r'<tool_?call\s*/>\s*(\{[\s\S]*?"args"[\s\S]*?\})', search_text, re.IGNORECASE)
+            match = re.search(r'<tool_?call\s*/>\s*(\{[\s\S]*?"tool"\s*:\s*"[^"]+"\s*,\s*"args"\s*:\s*\{[\s\S]*?\}\s*\})', search_text, re.IGNORECASE)
             if match:
                 tool_call_match = match
         
-        # Format 3: Just find JSON with "tool" key after any toolcall-like tag
+        # Format 3: JSON with tool AND args keys after toolcall-like tag (stricter - requires args)
         if not tool_call_match:
-            match = re.search(r'<tool[^>]*>\s*(\{[^{}]*"tool"[^{}]*\})', search_text, re.IGNORECASE)
+            match = re.search(r'<tool[^>]*>\s*(\{[^{}]*"tool"\s*:\s*"[^"]+"\s*,\s*"args"\s*:\s*\{[^{}]*\}[^{}]*\})', search_text, re.IGNORECASE)
             if match:
                 tool_call_match = match
         
-        # Format 4: Standalone JSON with tool/args pattern (no tags)
+        # Format 4: Standalone JSON - stricter pattern requiring complete args object
         if not tool_call_match:
-            match = re.search(r'(\{"tool"\s*:\s*"[^"]+"\s*,\s*"args"\s*:\s*\{[^}]*\}\s*\})', search_text)
+            match = re.search(r'(\{"tool"\s*:\s*"[^"]+"\s*,\s*"args"\s*:\s*\{[^{}]+\}\s*\})', search_text)
+            if match:
+                tool_call_match = match
+        
+        # Format 5: Fallback for tools that genuinely have no required args (empty args OK)
+        # Only match if we see complete JSON structure with closing tag
+        if not tool_call_match:
+            match = re.search(r'<tool_?call>\s*(\{"tool"\s*:\s*"[^"]+"\s*,\s*"args"\s*:\s*\{\s*\}\s*\})\s*</tool_?call>', search_text, re.IGNORECASE)
             if match:
                 tool_call_match = match
         
@@ -728,6 +735,28 @@ async def run_agent(
                 # Support multiple field names
                 tool_name = tool_data.get("tool") or tool_data.get("name", "")
                 tool_args = tool_data.get("args") or tool_data.get("arguments", {})
+                
+                # Validate: tools that typically need args should have non-empty args
+                TOOLS_REQUIRING_ARGS = {
+                    "run_bash": ["script"],
+                    "run_python": ["script"],
+                    "exec": ["command"],
+                    "read_file": ["path"],
+                    "write_file": ["path", "content"],
+                    "edit_file": ["path"],
+                    "memory_update": ["content"],
+                    "memory_log": ["content"],
+                    "user_update": ["data"],
+                }
+                
+                required_args = TOOLS_REQUIRING_ARGS.get(tool_name, [])
+                missing_args = [arg for arg in required_args if arg not in tool_args or not tool_args[arg]]
+                
+                if missing_args:
+                    logger.warning(f"Tool {tool_name} missing required args: {missing_args}, skipping execution")
+                    # Don't execute, let LLM try again with complete args
+                    full_prompt += f"{response_part}\n\n<tool_result>\nError: Tool '{tool_name}' requires arguments: {', '.join(required_args)}. Please provide complete arguments.\n</tool_result>\n\nassistant\n"
+                    continue
                 
                 logger.info(f"Executing tool: {tool_name} with args: {list(tool_args.keys())}")
                 

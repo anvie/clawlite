@@ -84,6 +84,47 @@ LLM_MAX_RETRIES = config_get('agent.retry_attempts', 3)
 LLM_RETRY_DELAY = 2  # base delay for exponential backoff
 TOTAL_TIME_LIMIT = config_get('agent.total_timeout', 300)
 
+# Per-tool output limits (chars) - larger for code reading tools
+TOOL_OUTPUT_LIMITS = {
+    "read_file": 6000,      # Larger for code reading
+    "run_bash": 4000,       # Scripts may have longer output
+    "run_python": 4000,     # Python output
+    "exec": 2000,           # Simple commands
+    "grep": 3000,           # Search results
+    "find_files": 2000,     # File listings
+    "list_dir": 1500,       # Directory listings
+    "web_fetch": 5000,      # Web content
+    "default": 2000         # Default limit
+}
+
+
+def truncate_tool_output(output: str, tool_name: str) -> str:
+    """Truncate tool output with smart notice based on tool type."""
+    limit = TOOL_OUTPUT_LIMITS.get(tool_name, TOOL_OUTPUT_LIMITS["default"])
+    
+    if len(output) <= limit:
+        return output
+    
+    truncated = output[:limit]
+    remaining = len(output) - limit
+    
+    # Smart truncation notice based on tool
+    if tool_name == "read_file":
+        notice = (
+            f"\n\n[TRUNCATED - Showing {limit}/{len(output)} chars]\n"
+            f"[File read complete. Use offset parameter to read specific sections if needed]\n"
+            f"[⚠️ DO NOT re-read this file - you already have the content above]"
+        )
+    elif tool_name in ("run_bash", "run_python", "exec"):
+        notice = (
+            f"\n\n[OUTPUT TRUNCATED - {limit}/{len(output)} chars shown]\n"
+            f"[Command executed successfully. {remaining} chars omitted]"
+        )
+    else:
+        notice = f"\n\n[TRUNCATED - {remaining} more chars. Output limit: {limit}]"
+    
+    return truncated + notice
+
 
 def format_skill_prompts() -> str:
     """Format skill prompts for inclusion in system prompt."""
@@ -798,8 +839,8 @@ async def run_agent(
                         result_text = f"File ready: {result.file_data.get('filename', 'file')}"
                         logger.info(f"Tool {tool_name} returned file: {result.file_data.get('filename')}")
                     elif result.success:
-                        result_text = f"{result.output[:2000]}"
-                        logger.info(f"Tool {tool_name} succeeded, output length: {len(result.output)}")
+                        result_text = truncate_tool_output(result.output, tool_name)
+                        logger.info(f"Tool {tool_name} succeeded, output length: {len(result.output)}, truncated to: {len(result_text)}")
                     else:
                         result_text = f"Error: {result.error}"
                         logger.warning(f"Tool {tool_name} failed: {result.error}")

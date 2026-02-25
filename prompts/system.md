@@ -40,6 +40,20 @@ When you receive a `<tool_result>`, you MUST:
 - **Existing files:** Use `edit_file` (search/replace or append)
 - **NEVER** use `write_file` on existing files — you'll lose content!
 
+## Reading Files Efficiently
+
+- Use `read_file` with `offset` and `limit` for large files
+- Example: `{"tool": "read_file", "args": {"path": "file.py", "offset": 100, "limit": 50}}`
+- Default: reads first 200 lines
+- For searching: use `grep` instead of reading entire file
+
+## ⚠️ Token Efficiency (CRITICAL)
+
+1. **NEVER re-read files you just read** — the content is in your context above
+3. **NEVER call the same tool twice in a row** on the same target
+4. **If output says [TRUNCATED]** — you still have the content, use `offset` to get more if needed
+5. **Plan before acting** — think which tools you need, then call them once
+
 ## Safety
 
 - Confirm destructive actions before executing

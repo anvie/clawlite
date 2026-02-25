@@ -6,10 +6,16 @@ from .base import Tool, ToolResult, WORKSPACE
 
 class ReadFileTool(Tool):
     name = "read_file"
-    description = "Read contents of a file. Regular users: workspace only. Admin/owner: any path."
-    parameters = {"path": "string - relative path to file (or absolute for admin)"}
+    description = """Read contents of a file with optional line range.
+Regular users: workspace only. Admin/owner: any path.
+For large files, use offset/limit to read specific sections."""
+    parameters = {
+        "path": "string - relative path to file (or absolute for admin)",
+        "offset": "int - start line number, 1-indexed (optional, default: 1)",
+        "limit": "int - max lines to read (optional, default: 200)"
+    }
     
-    async def execute(self, path: str = "", **kwargs) -> ToolResult:
+    async def execute(self, path: str = "", offset: int = 1, limit: int = 200, **kwargs) -> ToolResult:
         try:
             full_path = self.validate_path(path)
             
@@ -20,13 +26,41 @@ class ReadFileTool(Tool):
                 return ToolResult(False, "", f"Not a file: {path}")
             
             # Size limit (1MB)
-            if os.path.getsize(full_path) > 1_000_000:
+            file_size = os.path.getsize(full_path)
+            if file_size > 1_000_000:
                 return ToolResult(False, "", f"File too large (>1MB): {path}")
             
             with open(full_path, "r", encoding="utf-8", errors="replace") as f:
-                content = f.read()
+                all_lines = f.readlines()
             
-            return ToolResult(True, content)
+            total_lines = len(all_lines)
+            
+            # Handle offset/limit
+            offset = max(1, int(offset))  # 1-indexed
+            limit = max(1, min(500, int(limit)))  # Cap at 500 lines
+            
+            start_idx = offset - 1
+            end_idx = start_idx + limit
+            
+            selected_lines = all_lines[start_idx:end_idx]
+            content = "".join(selected_lines)
+            
+            # Build output with metadata
+            lines_shown = len(selected_lines)
+            
+            if offset == 1 and lines_shown >= total_lines:
+                # Full file shown
+                output = content
+            else:
+                # Partial file - add navigation hints
+                header = f"[Lines {offset}-{offset + lines_shown - 1} of {total_lines}]\n"
+                footer = ""
+                if end_idx < total_lines:
+                    remaining = total_lines - end_idx
+                    footer = f"\n[{remaining} more lines. Use offset={end_idx + 1} to continue]"
+                output = header + content + footer
+            
+            return ToolResult(True, output)
             
         except ValueError as e:
             return ToolResult(False, "", str(e))

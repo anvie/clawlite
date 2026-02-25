@@ -786,8 +786,40 @@ async def run_agent(
                 except json.JSONDecodeError:
                     logger.warning(f"Failed to parse args in malformed tool call")
         
+        # Format 7: Raw JSON without tool_call tags - model outputs {"script": "..."} or {"command": "..."}
+        # This is a common mistake - convert to proper format
+        if not tool_call_match:
+            # Pattern: {"script": "..."} → run_bash
+            match = re.search(r'\{"script"\s*:\s*"((?:[^"\\]|\\.)*)"\s*\}', search_text)
+            if match:
+                script_content = match.group(1)
+                logger.warning(f"Detected raw script JSON without tool_call tags, converting to run_bash")
+                tool_call_match = type('obj', (object,), {
+                    'group': lambda self, n, sc=script_content: json.dumps({"tool": "run_bash", "args": {"script": sc}})
+                })()
+        
+        if not tool_call_match:
+            # Pattern: {"command": "..."} → exec
+            match = re.search(r'\{"command"\s*:\s*"((?:[^"\\]|\\.)*)"\s*\}', search_text)
+            if match:
+                cmd_content = match.group(1)
+                logger.warning(f"Detected raw command JSON without tool_call tags, converting to exec")
+                tool_call_match = type('obj', (object,), {
+                    'group': lambda self, n, cmd=cmd_content: json.dumps({"tool": "exec", "args": {"command": cmd}})
+                })()
+        
+        if not tool_call_match:
+            # Pattern: {"path": "..."} → read_file
+            match = re.search(r'\{"path"\s*:\s*"((?:[^"\\]|\\.)*)"\s*\}', search_text)
+            if match:
+                path_content = match.group(1)
+                logger.warning(f"Detected raw path JSON without tool_call tags, converting to read_file")
+                tool_call_match = type('obj', (object,), {
+                    'group': lambda self, n, p=path_content: json.dumps({"tool": "read_file", "args": {"path": p}})
+                })()
+        
         # DEBUG: Log when no tool call found but response contains tool-like patterns
-        if not tool_call_match and ('<tool' in search_text.lower() or '"args"' in search_text):
+        if not tool_call_match and ('<tool' in search_text.lower() or '"args"' in search_text or '"script"' in search_text or '"command"' in search_text):
             logger.debug(f"No tool call matched. search_text sample (500 chars): {search_text[:500]}")
         
         if tool_call_match:

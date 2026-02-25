@@ -9,6 +9,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     cron \
     libmagic1 \
     gosu \
+    git \
     && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user (add to crontab group for cron access)

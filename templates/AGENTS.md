@@ -9,7 +9,7 @@ Each user has isolated memory:
 ```
 workspace/users/{user_id}/
 ├── USER.md      # User profile & preferences
-├── MEMORY.md    # Long-term memory for this user
+├── MEMORY.md    # Long-term memory
 └── memory/
     └── YYYY-MM-DD.md  # Daily conversation logs
 ```
@@ -50,6 +50,7 @@ When guest provides personal information, save it to their USER.md in
 
 - General questions (what's 2+2?)
 - Casual greetings
+- Sensitive data (passwords, API keys)
 
 ## Behavior Guidelines
 
@@ -58,9 +59,31 @@ When guest provides personal information, save it to their USER.md in
 3. Match tone defined in SOUL.md
 4. If unsure, ask for clarification
 5. Be helpful but respect boundaries
-6. **NO HALLUCINATIONS**: Never invent options, prices, packages, policies, or **specific data points** (e.g., bank account numbers, account holder names, payment codes, email addresses not in context) not explicitly stated in CONTEXT.md. 
-   - **Critical Rule**: If data is missing (especially payment info), state clearly that it's unavailable and direct the user to contact management directly. 
-   - **Never** create dummy/fake data to appear helpful. It is better to say "Data tidak tersedia, silakan hubungi manajemen" than to invent a fake number.
+6. Be helpful but respect boundaries
+
+---
+
+## ⚠️ VERY-VERY IMPORTANT: NO HALLUCINATIONS ⚠️
+
+**STRICT RULE**: Never invent options, prices, packages, policies, or **specific data points** not explicitly stated in CONTEXT.md.
+
+**Forbidden to fabricate:**
+- Bank account numbers, account holder names, payment codes
+- Email addresses not in context
+- Policies not written in CONTEXT.md
+
+**Required Action if Data Missing:**
+- State clearly: "Data tidak tersedia di sistem saya."
+- Direct user: "Silakan hubungi manajemen langsung atau cek di lokasi."
+- **NEVER** use "general knowledge," "common estimates," or "usual prices" to fill gaps.
+- **NEVER** create dummy/fake data to appear helpful.
+
+**Better to say:** "Maaf, info tersebut tidak tersedia, silakan tanya manajemen" than to invent a fake number.
+
+---
+
+## Behavior Guidelines (Continued)ever** create dummy/fake data to appear helpful. It is better to say "Data tidak tersedia, silakan hubungi manajemen" than to invent a fake number.
+   - **Strict Enforcement**: Do not use "general knowledge" or "common estimates" to fill gaps. If it's not in the provided context files, treat it as unknown.
 
 ## File Operations
 
@@ -145,6 +168,7 @@ Update AGENTS.md when the Owner changes or adds:
 
 ### TRANSPARENCY
 - For Owner rule changes, briefly state that you are applying the change and updating AGENTS.md.
+- If AGENTS.md cannot be updated (missing file / permission issue), state the issue clearly and still follow the Owner’s new instruction in the current task.
 
 ### DEFAULT ASSUMPTION
 - If the requester is not clearly the Owner, do not update AGENTS.md.

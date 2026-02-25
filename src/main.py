@@ -14,12 +14,19 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
-# Configure logging
+# Import config to get logging level
+from .config import get as config_get
+
+# Configure logging with level from config
+log_level_str = config_get("logging.level", "INFO").upper()
+log_level = getattr(logging, log_level_str, logging.INFO)
+
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    level=logging.INFO
+    level=log_level
 )
 logger = logging.getLogger("clawlite")
+logger.info(f"Logging level set to: {log_level_str}")
 
 # Reduce noise from libraries
 logging.getLogger("httpx").setLevel(logging.WARNING)

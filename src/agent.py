@@ -727,6 +727,28 @@ async def run_agent(
             if match:
                 tool_call_match = match
         
+        # Format 6: Model uses tool name as key instead of "tool" field (e.g., {"run_bash": {...}})
+        # This is malformed but we can try to extract it
+        if not tool_call_match:
+            match = re.search(r'<tool_?call>\s*\{["\'](\w+)["\']\s*,\s*["\']args["\']\s*:\s*(\{[\s\S]*?\})\s*\}\s*</tool_?call>', search_text, re.IGNORECASE)
+            if match:
+                # Convert malformed JSON to proper format
+                tool_name_from_key = match.group(1)
+                args_json = match.group(2)
+                logger.warning(f"Detected malformed tool call format: {{{tool_name_from_key}, args: ...}}")
+                try:
+                    tool_args = json.loads(args_json)
+                    # Create a synthetic match with proper structure
+                    tool_call_match = type('obj', (object,), {
+                        'group': lambda self, n: json.dumps({"tool": tool_name_from_key, "args": tool_args})
+                    })()
+                except json.JSONDecodeError:
+                    logger.warning(f"Failed to parse args in malformed tool call")
+        
+        # DEBUG: Log when no tool call found but response contains tool-like patterns
+        if not tool_call_match and ('<tool' in search_text.lower() or '"args"' in search_text):
+            logger.debug(f"No tool call matched. search_text sample (500 chars): {search_text[:500]}")
+        
         if tool_call_match:
             try:
                 tool_json = tool_call_match.group(1)
@@ -807,12 +829,19 @@ async def run_agent(
     raw_response_text = accumulated_response
     
     # Extract thinking content before stripping (for conversation log)
+    # Support multiple tag formats: <thought>, <thinking>, <think>
     thinking_content_text = None
-    thought_match = re.search(r'<thought>([\s\S]*?)</thought>', raw_response_text, re.IGNORECASE)
+    thought_match = re.search(r'<(?:thought|thinking|think)>([\s\S]*?)</(?:thought|thinking|think)>', raw_response_text, re.IGNORECASE)
     if thought_match:
         thinking_content_text = thought_match.group(1).strip()
+        logger.debug(f"Extracted thinking from tags: {len(thinking_content_text)} chars")
     elif current_thinking:  # Use accumulated thinking if available
         thinking_content_text = current_thinking.strip()
+        logger.debug(f"Using accumulated thinking: {len(thinking_content_text)} chars")
+    
+    # DEBUG: Log if thinking tags present but not captured
+    if not thinking_content_text and ('<think' in raw_response_text.lower() or '<thought' in raw_response_text.lower()):
+        logger.warning(f"Thinking tags detected but not captured. raw_response sample: {raw_response_text[:300]}")
     
     # Strip all thinking tags and tool call leaks
     final_response = strip_thinking_tags(raw_response_text)

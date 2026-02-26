@@ -16,7 +16,7 @@ class ExecTool(Tool):
     parameters = {"command": "string - the command to execute"}
     
     # Allowed commands
-    ALLOWED = {"cat", "head", "tail", "wc", "grep", "rg", "find", "ls", "pwd", "echo", "date", "whoami", "curl", "pkill", "pgrep"}
+    ALLOWED = {"cat", "head", "tail", "wc", "grep", "rg", "find", "ls", "pwd", "echo", "date", "whoami", "curl", "pkill", "pgrep", "sed"}
     
     async def execute(self, command: str = "", **kwargs) -> ToolResult:
         try:

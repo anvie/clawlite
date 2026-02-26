@@ -667,6 +667,8 @@ async def run_agent(
     thinking_shown = False
     last_tool_result = None  # Track last tool result for fallback
     pending_file_data = None  # Track file data from skills
+    json_parse_failures = 0  # Track consecutive JSON parse failures
+    MAX_JSON_FAILURES = 3  # Stop after this many consecutive failures
     
     while iterations < max_iterations:
         iterations += 1
@@ -839,6 +841,7 @@ async def run_agent(
                     "read_file": ["path"],
                     "write_file": ["path", "content"],
                     "edit_file": ["path"],
+                    "replace_in_file": ["path", "start_line", "end_line", "new_content"],
                     "memory_update": ["content"],
                     "memory_log": ["content"],
                     "user_update": ["data"],
@@ -854,6 +857,9 @@ async def run_agent(
                     continue
                 
                 logger.info(f"Executing tool: {tool_name} with args: {list(tool_args.keys())}")
+                
+                # Reset JSON parse failure counter on successful parse
+                json_parse_failures = 0
                 
                 if status_callback:
                     try:
@@ -889,9 +895,20 @@ async def run_agent(
                     full_prompt += f"{response_part}\n\n<tool_result>\n{error_text}\n</tool_result>\n\nassistant\n"
                 
             except json.JSONDecodeError as e:
-                error_text = f"Invalid tool call JSON: {e}"
-                logger.warning(f"Failed to parse tool call: {tool_json[:200]}")
-                full_prompt += f"{response_part}\n\n<tool_result>\n{error_text}\n</tool_result>\n\nassistant\n"
+                json_parse_failures += 1
+                error_text = f"Invalid tool call JSON (attempt {json_parse_failures}/{MAX_JSON_FAILURES}): {e}"
+                logger.warning(f"Failed to parse tool call ({json_parse_failures}/{MAX_JSON_FAILURES}): {tool_json[:200]}")
+                
+                if json_parse_failures >= MAX_JSON_FAILURES:
+                    logger.error(f"Too many JSON parse failures ({MAX_JSON_FAILURES}), aborting agent loop")
+                    accumulated_response = (
+                        "Maaf, saya mengalami kesulitan teknis dalam memformat perintah. "
+                        "Silakan coba lagi dengan permintaan yang lebih sederhana, "
+                        "atau pecah menjadi langkah-langkah kecil."
+                    )
+                    break
+                
+                full_prompt += f"{response_part}\n\n<tool_result>\n{error_text}. Please output valid JSON inside <tool_call> tags. Keep the args simple and short.\n</tool_result>\n\nassistant\n"
         else:
             # No tool call, this is the final response
             logger.debug("No tool call found, finishing agent loop")

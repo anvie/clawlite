@@ -267,9 +267,11 @@ class OpenRouterProvider(LLMProvider):
         temperature: float = 0.3,
         images: list[str] = None,  # List of base64 encoded images
     ) -> AsyncGenerator[Tuple[str, bool, Optional[str]], None]:
-        """Stream response from OpenRouter."""
+        """Stream response from OpenRouter or OpenAI-compatible server."""
         
-        if not self.api_key:
+        # Only require API key for actual OpenRouter (not self-hosted)
+        is_self_hosted = self.base_url != OPENROUTER_BASE_URL
+        if not is_self_hosted and not self.api_key:
             raise ValueError("OPENROUTER_API_KEY not set")
         
         messages = []
@@ -309,24 +311,38 @@ class OpenRouterProvider(LLMProvider):
         thinking_done = False
         
         headers = {
-            "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
-            "HTTP-Referer": "https://github.com/anvie/clawlite",
-            "X-Title": "ClawLite",
         }
+        
+        # Only add OpenRouter-specific headers for actual OpenRouter
+        if not is_self_hosted:
+            headers["Authorization"] = f"Bearer {self.api_key}"
+            headers["HTTP-Referer"] = "https://github.com/anvie/clawlite"
+            headers["X-Title"] = "ClawLite"
+        elif self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
+        
+        request_body = {
+            "model": self.model,
+            "messages": messages,
+            "stream": True,
+            "temperature": temperature,
+            "top_p": 0.9,
+        }
+        
+        # Add thinking control for self-hosted servers (e.g. llama.cpp + Qwen3.5)
+        if is_self_hosted:
+            enable_thinking = get_llm_enable_thinking()
+            request_body["chat_template_kwargs"] = {
+                "enable_thinking": enable_thinking
+            }
         
         async with httpx.AsyncClient(timeout=300.0) as client:
             async with client.stream(
                 "POST",
                 f"{self.base_url}/chat/completions",
                 headers=headers,
-                json={
-                    "model": self.model,
-                    "messages": messages,
-                    "stream": True,
-                    "temperature": temperature,
-                    "top_p": 0.9,
-                }
+                json=request_body,
             ) as response:
                 response.raise_for_status()
                 
@@ -346,14 +362,27 @@ class OpenRouterProvider(LLMProvider):
                         
                         delta = choices[0].get("delta", {})
                         token = delta.get("content", "")
+                        reasoning = delta.get("reasoning_content", "")
+                        
+                        # Handle reasoning_content field (llama.cpp / Qwen3.5 style)
+                        if reasoning:
+                            thinking_buffer += reasoning
+                            in_thinking = True
+                            yield ("", True, thinking_buffer)
+                            continue
+                        
+                        # If we were in reasoning and now got content, mark thinking done
+                        if in_thinking and token:
+                            thinking_done = True
+                            in_thinking = False
                         
                         if not token:
                             continue
                         
                         full_response += token
                         
-                        # Check for thinking tags (same logic as Ollama)
-                        if "<think>" in full_response and not in_thinking:
+                        # Check for thinking tags (Ollama / inline style fallback)
+                        if "<think>" in full_response and not in_thinking and not thinking_done:
                             in_thinking = True
                             thinking_buffer = ""
                         
@@ -709,13 +738,24 @@ class AnthropicProvider(LLMProvider):
                         continue
 
 
+def get_llm_base_url() -> str:
+    """Get custom LLM base URL from config (for self-hosted OpenAI-compatible servers)."""
+    return str(_get_config("llm.base_url", ""))
+
+
+def get_llm_enable_thinking() -> bool:
+    """Get thinking toggle from config (for Qwen3.5 models via llama.cpp)."""
+    return bool(_get_config("llm.enable_thinking", True))
+
+
 def get_provider() -> LLMProvider:
     """Get the configured LLM provider."""
     provider = get_llm_provider()
     if provider == "anthropic":
         return AnthropicProvider()
     elif provider == "openrouter":
-        return OpenRouterProvider()
+        base_url = get_llm_base_url() or None
+        return OpenRouterProvider(base_url=base_url)
     else:
         return OllamaProvider()
 

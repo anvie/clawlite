@@ -214,6 +214,92 @@ More token-efficient than write_file for small changes."""
             return ToolResult(False, "", f"Error editing file: {e}")
 
 
+class ReplaceInFileTool(Tool):
+    name = "replace_in_file"
+    description = """Replace text in a file using line numbers. More reliable than edit_file for code changes.
+Read the file first to find exact line numbers, then specify the range to replace.
+Regular users: workspace only. Admin/owner: any path.
+
+⚠️ PREFERRED over edit_file/write_file for modifying code — smaller JSON args, less error-prone."""
+    parameters = {
+        "path": "string - relative path to file (or absolute for admin)",
+        "start_line": "int - first line to replace (1-indexed, inclusive)",
+        "end_line": "int - last line to replace (1-indexed, inclusive)",
+        "new_content": "string - replacement content (will replace lines start_line through end_line)",
+    }
+
+    async def execute(
+        self,
+        path: str = "",
+        start_line: int = 0,
+        end_line: int = 0,
+        new_content: str = "",
+        **kwargs,
+    ) -> ToolResult:
+        try:
+            full_path = self.validate_path(path)
+
+            if not os.path.exists(full_path):
+                return ToolResult(False, "", f"File not found: {path}")
+
+            if not os.path.isfile(full_path):
+                return ToolResult(False, "", f"Not a file: {path}")
+
+            with open(full_path, "r", encoding="utf-8", errors="replace") as f:
+                lines = f.readlines()
+
+            total_lines = len(lines)
+            start_line = int(start_line)
+            end_line = int(end_line)
+
+            if start_line < 1 or end_line < 1:
+                return ToolResult(False, "", "start_line and end_line must be >= 1")
+
+            if start_line > end_line:
+                return ToolResult(False, "", "start_line must be <= end_line")
+
+            if start_line > total_lines:
+                return ToolResult(
+                    False, "",
+                    f"start_line ({start_line}) exceeds file length ({total_lines} lines)"
+                )
+
+            # Clamp end_line to file length (allow replacing to end of file)
+            if end_line > total_lines:
+                end_line = total_lines
+
+            # Ensure new_content ends with newline for clean joining
+            if new_content and not new_content.endswith("\n"):
+                new_content += "\n"
+
+            # Build new file content
+            before = lines[: start_line - 1]
+            after = lines[end_line:]
+            new_lines = new_content.splitlines(True) if new_content else []
+
+            result_content = "".join(before) + "".join(new_lines) + "".join(after)
+
+            # Size limit
+            if len(result_content.encode("utf-8")) > 1_000_000:
+                return ToolResult(False, "", "Resulting file too large (>1MB)")
+
+            with open(full_path, "w", encoding="utf-8") as f:
+                f.write(result_content)
+
+            old_count = end_line - start_line + 1
+            new_count = len(new_lines)
+            return ToolResult(
+                True,
+                f"Replaced lines {start_line}-{end_line} ({old_count} lines) "
+                f"with {new_count} lines in {path} (total: {len(before) + new_count + len(after)} lines)",
+            )
+
+        except ValueError as e:
+            return ToolResult(False, "", str(e))
+        except Exception as e:
+            return ToolResult(False, "", f"Error replacing in file: {e}")
+
+
 class ListDirTool(Tool):
     name = "list_dir"
     description = "List contents of a directory in workspace"

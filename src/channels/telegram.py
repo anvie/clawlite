@@ -241,13 +241,20 @@ class TelegramChannel(BaseChannel):
         
         try:
             # Import agent here to avoid circular imports
-            from ..agent import run_agent
+            from ..agent import run_agent, DEBUG_TOOL_ERRORS
+            
+            # Build debug callback for this chat
+            raw_chat_id = str(update.effective_chat.id)
+            
+            async def _debug_cb(uid: str, tool_info: dict):
+                await self.send_debug_alert(raw_chat_id, tool_info)
             
             result = await run_agent(
                 user_message,
                 self.conversations[user_id],
                 user_id=user_id,
                 status_callback=update_status,
+                debug_callback=_debug_cb if DEBUG_TOOL_ERRORS else None,
                 images=images,
             )
             
@@ -329,6 +336,55 @@ class TelegramChannel(BaseChannel):
         except Exception as e:
             self.logger.error(f"Failed to send file: {e}")
             await status_msg.edit_text("❌ Gagal mengirim file. Coba lagi.")
+    
+    async def send_debug_alert(self, chat_id: str, tool_info: dict) -> None:
+        """Send a debug alert for failed tool calls as a separate Telegram message."""
+        try:
+            import json as _json
+            
+            tool_name = tool_info.get("tool", "unknown")
+            exit_code = tool_info.get("exit_code")
+            error = tool_info.get("result", "")
+            duration = tool_info.get("duration_ms", 0)
+            args = tool_info.get("args", {})
+            
+            # Truncate args for display
+            display_args = {}
+            for k, v in args.items():
+                if isinstance(v, str) and len(v) > 300:
+                    display_args[k] = v[:300] + f"... ({len(v)} chars)"
+                else:
+                    display_args[k] = v
+            
+            parts = [f"⚠️ *Tool Failed:* `{tool_name}`"]
+            if exit_code is not None:
+                parts.append(f"*Exit code:* `{exit_code}`")
+            parts.append(f"*Duration:* {duration}ms")
+            if error:
+                # Escape markdown special chars in error
+                safe_error = error[:500].replace("_", "\\_").replace("*", "\\*").replace("`", "\\`")
+                parts.append(f"*Error:* {safe_error}")
+            if display_args:
+                args_str = _json.dumps(display_args, indent=2, ensure_ascii=False)
+                if len(args_str) > 500:
+                    args_str = args_str[:500] + "..."
+                parts.append(f"*Args:*\n```json\n{args_str}\n```")
+            
+            text = "\n".join(parts)
+            
+            await self.app.bot.send_message(
+                chat_id=int(chat_id),
+                text=text,
+                parse_mode="Markdown",
+            )
+        except Exception as e:
+            self.logger.warning(f"Failed to send debug alert: {e}")
+            # Fallback without markdown
+            try:
+                fallback = f"⚠️ Tool Failed: {tool_info.get('tool', '?')}\nError: {tool_info.get('result', '?')[:300]}"
+                await self.app.bot.send_message(chat_id=int(chat_id), text=fallback)
+            except Exception:
+                pass
     
     async def _send_chunked(
         self,

@@ -85,6 +85,7 @@ LLM_MAX_RETRIES = config_get('agent.retry_attempts', 3)
 LLM_RETRY_DELAY = 2  # base delay for exponential backoff
 TOTAL_TIME_LIMIT = config_get('agent.total_timeout', 300)
 SHOW_TOOL_CALLS = config_get('agent.show_tool_calls', False)  # Show raw tool_call in stream (debug)
+DEBUG_TOOL_ERRORS = config_get('agent.debug_tool_errors', False)  # Send failed tool calls as separate message
 
 # Per-tool output limits (chars) - larger for code reading tools
 TOOL_OUTPUT_LIMITS = {
@@ -272,6 +273,7 @@ async def _run_agent_native_tools(
     system_prompt: str,
     user_id: Optional[str] = None,
     status_callback: Optional[Callable[[str], Awaitable[None]]] = None,
+    debug_callback: Optional[Callable[[str, dict], Awaitable[None]]] = None,
     max_iterations: int = 10,
     images: list[str] = None,
     start_time: float = None,
@@ -332,6 +334,7 @@ async def _run_agent_native_tools(
     thinking_buffer = ""
     pending_file_data = None
     last_tool_result = None
+    all_tool_interactions = []  # Collect all tool calls + results for conversation log
     
     while iterations < max_iterations:
         iterations += 1
@@ -447,7 +450,9 @@ async def _run_agent_native_tools(
             tool = get_tool(tc.name, user_id=user_id)
             
             if tool:
+                tool_start = time.time()
                 result = await execute_tool_with_timeout(tool, tc.arguments)
+                tool_duration_ms = int((time.time() - tool_start) * 1000)
                 
                 # Check for file data
                 if result.file_data:
@@ -463,6 +468,24 @@ async def _run_agent_native_tools(
                 
                 last_tool_result = {"tool": tc.name, "result": result_text, "success": result.success}
                 
+                # Collect tool interaction for conversation log
+                interaction = {
+                    "tool": tc.name,
+                    "args": tc.arguments,
+                    "result": result_text[:2000],  # Cap result size in log
+                    "success": result.success,
+                    "exit_code": result.exit_code,
+                    "duration_ms": tool_duration_ms,
+                }
+                all_tool_interactions.append(interaction)
+                
+                # Fire debug callback on failure
+                if not result.success and DEBUG_TOOL_ERRORS and debug_callback:
+                    try:
+                        await debug_callback(user_id, interaction)
+                    except Exception as e:
+                        logger.warning(f"Debug callback failed: {e}")
+                
                 tool_results.append(LLMToolResult(
                     tool_use_id=tc.id,
                     content=result_text,
@@ -470,6 +493,22 @@ async def _run_agent_native_tools(
                 ))
             else:
                 logger.warning(f"Unknown tool: {tc.name}")
+                interaction = {
+                    "tool": tc.name,
+                    "args": tc.arguments if hasattr(tc, 'arguments') else {},
+                    "result": f"Unknown tool: {tc.name}",
+                    "success": False,
+                    "exit_code": None,
+                    "duration_ms": 0,
+                }
+                all_tool_interactions.append(interaction)
+                
+                if DEBUG_TOOL_ERRORS and debug_callback:
+                    try:
+                        await debug_callback(user_id, interaction)
+                    except Exception as e:
+                        logger.warning(f"Debug callback failed: {e}")
+                
                 tool_results.append(LLMToolResult(
                     tool_use_id=tc.id,
                     content=f"Unknown tool: {tc.name}",
@@ -523,7 +562,11 @@ async def _run_agent_native_tools(
             from .conversation import append_message, is_enabled
             if is_enabled():
                 append_message(user_id, "user", user_message)
-                append_message(user_id, "assistant", final_response, thinking=thinking_content)
+                append_message(
+                    user_id, "assistant", final_response,
+                    thinking=thinking_content,
+                    tool_calls=all_tool_interactions if all_tool_interactions else None,
+                )
         except Exception as e:
             logger.warning(f"Failed to save conversation: {e}")
     
@@ -542,6 +585,7 @@ async def run_agent(
     history: list[dict],
     user_id: Optional[str] = None,
     status_callback: Optional[Callable[[str], Awaitable[None]]] = None,
+    debug_callback: Optional[Callable[[str, dict], Awaitable[None]]] = None,
     max_iterations: int = 10,
     images: list[str] = None,  # List of base64 encoded images
 ) -> AgentResult:
@@ -553,6 +597,7 @@ async def run_agent(
         history: Conversation history
         user_id: Prefixed user ID (e.g., "tg_123456", "wa_628xxx")
         status_callback: Async callback for status updates
+        debug_callback: Async callback for debug tool error alerts (user_id, tool_info)
         max_iterations: Maximum tool call iterations
         images: List of base64 encoded images for multimodal input
     
@@ -637,6 +682,7 @@ async def run_agent(
             system_prompt=system_prompt,
             user_id=user_id,
             status_callback=status_callback,
+            debug_callback=debug_callback,
             max_iterations=max_iterations,
             images=images,
             start_time=start_time,
@@ -671,6 +717,7 @@ async def run_agent(
     pending_file_data = None  # Track file data from skills
     json_parse_failures = 0  # Track consecutive JSON parse failures
     MAX_JSON_FAILURES = 3  # Stop after this many consecutive failures
+    all_tool_interactions = []  # Collect all tool calls + results for conversation log
     
     while iterations < max_iterations:
         iterations += 1
@@ -810,7 +857,9 @@ async def run_agent(
             
             tool = get_tool(tool_name, user_id=user_id)
             if tool:
+                tool_start = time.time()
                 result = await execute_tool_with_timeout(tool, tool_args)
+                tool_duration_ms = int((time.time() - tool_start) * 1000)
                 
                 # Check for file data (from skills)
                 if result.file_data:
@@ -827,12 +876,47 @@ async def run_agent(
                 # Track last tool result for fallback
                 last_tool_result = {"tool": tool_name, "result": result_text, "success": result.success}
                 
+                # Collect tool interaction for conversation log
+                interaction = {
+                    "tool": tool_name,
+                    "args": tool_args,
+                    "result": result_text[:2000],
+                    "success": result.success,
+                    "exit_code": result.exit_code,
+                    "duration_ms": tool_duration_ms,
+                }
+                all_tool_interactions.append(interaction)
+                
+                # Fire debug callback on failure
+                if not result.success and DEBUG_TOOL_ERRORS and debug_callback:
+                    try:
+                        await debug_callback(user_id, interaction)
+                    except Exception as e:
+                        logger.warning(f"Debug callback failed: {e}")
+                
                 # Add to prompt for next iteration (LLM will interpret this)
                 full_prompt += f"{response_part}\n\n<tool_result>\n{result_text}\n</tool_result>\n\nassistant\n"
                 
             else:
                 error_text = f"Unknown tool: {tool_name}"
                 logger.warning(error_text)
+                
+                interaction = {
+                    "tool": tool_name,
+                    "args": tool_args,
+                    "result": error_text,
+                    "success": False,
+                    "exit_code": None,
+                    "duration_ms": 0,
+                }
+                all_tool_interactions.append(interaction)
+                
+                if DEBUG_TOOL_ERRORS and debug_callback:
+                    try:
+                        await debug_callback(user_id, interaction)
+                    except Exception as e:
+                        logger.warning(f"Debug callback failed: {e}")
+                
                 full_prompt += f"{response_part}\n\n<tool_result>\n{error_text}\n</tool_result>\n\nassistant\n"
         else:
             # No tool call, this is the final response
@@ -931,7 +1015,11 @@ async def run_agent(
             from .conversation import append_message, is_enabled
             if is_enabled():
                 append_message(user_id, "user", user_message)
-                append_message(user_id, "assistant", final_response, thinking=thinking_content_text)
+                append_message(
+                    user_id, "assistant", final_response,
+                    thinking=thinking_content_text,
+                    tool_calls=all_tool_interactions if all_tool_interactions else None,
+                )
         except Exception as e:
             logger.warning(f"Failed to save conversation: {e}")
     

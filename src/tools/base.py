@@ -30,6 +30,7 @@ class ToolResult:
     output: Optional[str] = None
     error: Optional[str] = None
     file_data: Optional[dict] = None  # For file responses (skills)
+    exit_code: Optional[int] = None  # For shell tools (exec, run_bash)
 
 
 class Tool(ABC):

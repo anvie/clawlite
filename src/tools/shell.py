@@ -51,7 +51,7 @@ class ExecTool(Tool):
                 stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=EXEC_TIMEOUT)
             except asyncio.TimeoutError:
                 proc.kill()
-                return ToolResult(False, "", f"Timeout ({EXEC_TIMEOUT}s)")
+                return ToolResult(False, "", f"Timeout ({EXEC_TIMEOUT}s)", exit_code=-1)
             
             output = stdout.decode("utf-8", errors="replace")
             if len(output) > 10000:
@@ -59,9 +59,9 @@ class ExecTool(Tool):
             
             if proc.returncode != 0:
                 errors = stderr.decode("utf-8", errors="replace")
-                return ToolResult(False, output, f"Exit {proc.returncode}: {errors[:500]}")
+                return ToolResult(False, output, f"Exit {proc.returncode}: {errors[:500]}", exit_code=proc.returncode)
             
-            return ToolResult(True, output or "(no output)")
+            return ToolResult(True, output or "(no output)", exit_code=proc.returncode)
         except Exception as e:
             return ToolResult(False, "", str(e))
 
@@ -102,7 +102,7 @@ class RunBashTool(Tool):
                     stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=EXEC_TIMEOUT)
                 except asyncio.TimeoutError:
                     proc.kill()
-                    return ToolResult(False, "", f"Timeout ({EXEC_TIMEOUT}s)")
+                    return ToolResult(False, "", f"Timeout ({EXEC_TIMEOUT}s)", exit_code=-1)
                 
                 output = stdout.decode("utf-8", errors="replace")
                 errors = stderr.decode("utf-8", errors="replace")
@@ -111,13 +111,11 @@ class RunBashTool(Tool):
                     output = output[:10000] + "\n... (truncated)"
                 
                 if proc.returncode != 0:
-                    return ToolResult(False, output, f"Exit {proc.returncode}: {errors[:500]}")
+                    return ToolResult(False, output, f"Exit {proc.returncode}: {errors[:500]}", exit_code=proc.returncode)
                 
-                return ToolResult(True, output or "(no output)")
+                return ToolResult(True, output or "(no output)", exit_code=proc.returncode)
             finally:
                 os.unlink(script_path)
                 
         except Exception as e:
             return ToolResult(False, "", str(e))
-
-

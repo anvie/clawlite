@@ -61,6 +61,7 @@ agent:
   total_timeout: 300      # 5 min max per conversation turn
   retry_attempts: 3       # LLM retry on failure
   show_tool_calls: false  # Show raw tool_call JSON in stream (debug mode)
+  debug_tool_errors: false # Send failed tool calls as separate ⚠️ message (Telegram only)
 
 # Tool settings
 tools:

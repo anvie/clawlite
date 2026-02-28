@@ -322,3 +322,15 @@ Role: {role_info}
         except Exception as e:
             self.logger.error(f"Failed to dump context for {user_id}: {e}")
             return f"❌ Failed to dump: {str(e)[:200]}"
+    
+    async def send_debug_alert(self, chat_id: str, tool_info: dict) -> None:
+        """
+        Send a debug alert for failed tool calls.
+        Override in channel subclass to implement (e.g., Telegram).
+        Default: no-op.
+        
+        Args:
+            chat_id: Raw chat/user ID for this channel
+            tool_info: Dict with tool, args, result, success, exit_code, duration_ms
+        """
+        pass

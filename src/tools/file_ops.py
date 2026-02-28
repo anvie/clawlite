@@ -1,6 +1,8 @@
-"""File operation tools - read, write, edit, list."""
+"""File operation tools - read, write, edit, list, send."""
 
 import os
+import base64
+import mimetypes
 from .base import Tool, ToolResult, WORKSPACE
 
 
@@ -333,3 +335,85 @@ class ListDirTool(Tool):
             return ToolResult(False, "", str(e))
         except Exception as e:
             return ToolResult(False, "", f"Error listing directory: {e}")
+
+
+# Max file size for send_file (10MB)
+SEND_FILE_MAX_SIZE = 10 * 1024 * 1024
+
+# Common MIME types by extension (fallback if mimetypes module doesn't know)
+_MIME_FALLBACKS = {
+    ".pdf": "application/pdf",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".png": "image/png",
+    ".gif": "image/gif",
+    ".webp": "image/webp",
+    ".csv": "text/csv",
+    ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ".zip": "application/zip",
+    ".txt": "text/plain",
+    ".json": "application/json",
+    ".mp3": "audio/mpeg",
+    ".ogg": "audio/ogg",
+    ".mp4": "video/mp4",
+}
+
+
+class SendFileTool(Tool):
+    name = "send_file"
+    description = (
+        "Send a file from workspace to the user via the current chat channel "
+        "(Telegram, WhatsApp, etc). Use this to deliver PDFs, images, documents, "
+        "or any file that the user requested. The file must already exist in workspace."
+    )
+    parameters = {
+        "path": "string - file path relative to /workspace (e.g. 'users/tg_123/invoice.pdf')",
+        "caption": "string - (optional) caption/message to send with the file",
+    }
+
+    async def execute(self, path: str = "", caption: str = "", **kwargs) -> ToolResult:
+        try:
+            full_path = self.validate_path(path)
+
+            if not os.path.exists(full_path):
+                return ToolResult(False, "", f"File not found: {path}")
+
+            if not os.path.isfile(full_path):
+                return ToolResult(False, "", f"Not a file: {path}")
+
+            file_size = os.path.getsize(full_path)
+            if file_size > SEND_FILE_MAX_SIZE:
+                size_mb = file_size / (1024 * 1024)
+                return ToolResult(False, "", f"File too large ({size_mb:.1f}MB, max 10MB)")
+
+            if file_size == 0:
+                return ToolResult(False, "", f"File is empty: {path}")
+
+            # Detect content type
+            filename = os.path.basename(full_path)
+            _, ext = os.path.splitext(filename.lower())
+            content_type = mimetypes.guess_type(full_path)[0]
+            if not content_type:
+                content_type = _MIME_FALLBACKS.get(ext, "application/octet-stream")
+
+            # Read and base64-encode
+            with open(full_path, "rb") as f:
+                data_b64 = base64.b64encode(f.read()).decode("ascii")
+
+            return ToolResult(
+                success=True,
+                output="",
+                file_data={
+                    "__file__": True,
+                    "filename": filename,
+                    "data": data_b64,
+                    "content_type": content_type,
+                    "caption": caption,
+                },
+            )
+
+        except ValueError as e:
+            return ToolResult(False, "", str(e))
+        except Exception as e:
+            return ToolResult(False, "", f"Error sending file: {e}")

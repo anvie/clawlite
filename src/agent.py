@@ -18,6 +18,7 @@ from .llm import (
     ToolResult as LLMToolResult,
 )
 from .tools import get_tool, format_tools_for_prompt, list_tools, SKILL_TOOLS
+from .tool_parser import extract_tool_call, has_pending_tool_call
 from .translation import translate_to_english, translate_to_indonesian, is_translation_enabled
 from .context import load_full_context, ensure_user_dir, is_bot_unconfigured, load_conversation_history
 from .config import get as config_get
@@ -83,6 +84,7 @@ TOOL_TIMEOUT = config_get('agent.tool_timeout', 30)
 LLM_MAX_RETRIES = config_get('agent.retry_attempts', 3)
 LLM_RETRY_DELAY = 2  # base delay for exponential backoff
 TOTAL_TIME_LIMIT = config_get('agent.total_timeout', 300)
+SHOW_TOOL_CALLS = config_get('agent.show_tool_calls', False)  # Show raw tool_call in stream (debug)
 
 # Per-tool output limits (chars) - larger for code reading tools
 TOOL_OUTPUT_LIMITS = {
@@ -713,7 +715,20 @@ async def run_agent(
                             clean = current_response.split("</think>")[-1].strip() if "</think>" in current_response else current_response.strip()
                             clean = strip_thinking_tags(clean)
                             if clean:
-                                await status_callback(f"{clean[:1500]}▌")
+                                # Hide in-progress tool call content from user (unless debug mode)
+                                if not SHOW_TOOL_CALLS and has_pending_tool_call(clean):
+                                    # Tool call being generated — show only text before it
+                                    for tag in ['<tool_call>', '<toolcall>', '<Tool_Call>']:
+                                        tag_lower_idx = clean.lower().find(tag.lower())
+                                        if tag_lower_idx != -1:
+                                            clean = clean[:tag_lower_idx].strip()
+                                            break
+                                    if clean:
+                                        await status_callback(f"{clean}\n\n🔧 _Preparing tool call..._")
+                                    else:
+                                        await status_callback("🔧 _Preparing tool call..._")
+                                else:
+                                    await status_callback(f"{clean[:1500]}▌")
                     except Exception as e:
                         logger.warning(f"Status callback failed: {e}")
                     last_update = current_time
@@ -733,174 +748,38 @@ async def run_agent(
         else:
             response_part = current_response.strip()
         
-        # Check for tool calls (support multiple formats)
-        # Search in both response_part AND full current_response (model may mix formats)
+        # Check for tool calls using robust parser (bracket-counting, not regex)
         search_text = current_response  # Search full response to catch all formats
         
-        tool_call_match = None
-        tool_json = None
+        parsed_tool = extract_tool_call(search_text)
         
-        # Format 1: <tool_call>{"tool": "x", "args": {...}}</tool_call> (requires closing tag)
-        match = re.search(r'<tool_?call>\s*(\{[\s\S]*?"args"\s*:\s*\{[\s\S]*?\}[\s\S]*?\})\s*</tool_?call>', search_text, re.IGNORECASE)
-        if match:
-            tool_call_match = match
-        
-        # Format 2: <toolcall/> followed by complete JSON with args
-        if not tool_call_match:
-            match = re.search(r'<tool_?call\s*/>\s*(\{[\s\S]*?"tool"\s*:\s*"[^"]+"\s*,\s*"args"\s*:\s*\{[\s\S]*?\}\s*\})', search_text, re.IGNORECASE)
-            if match:
-                tool_call_match = match
-        
-        # Format 3: JSON with tool AND args keys after toolcall-like tag (stricter - requires args)
-        if not tool_call_match:
-            match = re.search(r'<tool[^>]*>\s*(\{[^{}]*"tool"\s*:\s*"[^"]+"\s*,\s*"args"\s*:\s*\{[^{}]*\}[^{}]*\})', search_text, re.IGNORECASE)
-            if match:
-                tool_call_match = match
-        
-        # Format 4: Standalone JSON - stricter pattern requiring complete args object
-        if not tool_call_match:
-            match = re.search(r'(\{"tool"\s*:\s*"[^"]+"\s*,\s*"args"\s*:\s*\{[^{}]+\}\s*\})', search_text)
-            if match:
-                tool_call_match = match
-        
-        # Format 5: Fallback for tools that genuinely have no required args (empty args OK)
-        # Only match if we see complete JSON structure with closing tag
-        if not tool_call_match:
-            match = re.search(r'<tool_?call>\s*(\{"tool"\s*:\s*"[^"]+"\s*,\s*"args"\s*:\s*\{\s*\}\s*\})\s*</tool_?call>', search_text, re.IGNORECASE)
-            if match:
-                tool_call_match = match
-        
-        # Format 6: Model uses tool name as key instead of "tool" field (e.g., {"run_bash": {...}})
-        # This is malformed but we can try to extract it
-        if not tool_call_match:
-            match = re.search(r'<tool_?call>\s*\{["\'](\w+)["\']\s*,\s*["\']args["\']\s*:\s*(\{[\s\S]*?\})\s*\}\s*</tool_?call>', search_text, re.IGNORECASE)
-            if match:
-                # Convert malformed JSON to proper format
-                tool_name_from_key = match.group(1)
-                args_json = match.group(2)
-                logger.warning(f"Detected malformed tool call format: {{{tool_name_from_key}, args: ...}}")
-                try:
-                    tool_args = json.loads(args_json)
-                    # Create a synthetic match with proper structure
-                    tool_call_match = type('obj', (object,), {
-                        'group': lambda self, n: json.dumps({"tool": tool_name_from_key, "args": tool_args})
-                    })()
-                except json.JSONDecodeError:
-                    logger.warning(f"Failed to parse args in malformed tool call")
-        
-        # Format 7: Raw JSON without tool_call tags - model outputs {"script": "..."} or {"command": "..."}
-        # This is a common mistake - convert to proper format
-        if not tool_call_match:
-            # Pattern: {"script": "..."} → run_bash
-            match = re.search(r'\{"script"\s*:\s*"((?:[^"\\]|\\.)*)"\s*\}', search_text)
-            if match:
-                script_content = match.group(1)
-                logger.warning(f"Detected raw script JSON without tool_call tags, converting to run_bash")
-                tool_call_match = type('obj', (object,), {
-                    'group': lambda self, n, sc=script_content: json.dumps({"tool": "run_bash", "args": {"script": sc}})
-                })()
-        
-        if not tool_call_match:
-            # Pattern: {"command": "..."} → exec
-            match = re.search(r'\{"command"\s*:\s*"((?:[^"\\]|\\.)*)"\s*\}', search_text)
-            if match:
-                cmd_content = match.group(1)
-                logger.warning(f"Detected raw command JSON without tool_call tags, converting to exec")
-                tool_call_match = type('obj', (object,), {
-                    'group': lambda self, n, cmd=cmd_content: json.dumps({"tool": "exec", "args": {"command": cmd}})
-                })()
-        
-        if not tool_call_match:
-            # Pattern: {"path": "..."} → read_file
-            match = re.search(r'\{"path"\s*:\s*"((?:[^"\\]|\\.)*)"\s*\}', search_text)
-            if match:
-                path_content = match.group(1)
-                logger.warning(f"Detected raw path JSON without tool_call tags, converting to read_file")
-                tool_call_match = type('obj', (object,), {
-                    'group': lambda self, n, p=path_content: json.dumps({"tool": "read_file", "args": {"path": p}})
-                })()
-        
-        # DEBUG: Log when no tool call found but response contains tool-like patterns
-        if not tool_call_match and ('<tool' in search_text.lower() or '"args"' in search_text or '"script"' in search_text or '"command"' in search_text):
-            logger.debug(f"No tool call matched. search_text sample (500 chars): {search_text[:500]}")
-        
-        if tool_call_match:
-            try:
-                tool_json = tool_call_match.group(1)
-                tool_data = json.loads(tool_json)
-                
-                # Support multiple field names
-                tool_name = tool_data.get("tool") or tool_data.get("name", "")
-                tool_args = tool_data.get("args") or tool_data.get("arguments", {})
-                
-                # Validate: tools that typically need args should have non-empty args
-                TOOLS_REQUIRING_ARGS = {
-                    "run_bash": ["script"],
-                    "run_python": ["script"],
-                    "exec": ["command"],
-                    "read_file": ["path"],
-                    "write_file": ["path", "content"],
-                    "edit_file": ["path"],
-                    "replace_in_file": ["path", "start_line", "end_line", "new_content"],
-                    "memory_update": ["content"],
-                    "memory_log": ["content"],
-                    "user_update": ["data"],
-                }
-                
-                required_args = TOOLS_REQUIRING_ARGS.get(tool_name, [])
-                missing_args = [arg for arg in required_args if arg not in tool_args or not tool_args[arg]]
-                
-                if missing_args:
-                    logger.warning(f"Tool {tool_name} missing required args: {missing_args}, skipping execution")
-                    # Don't execute, let LLM try again with complete args
-                    full_prompt += f"{response_part}\n\n<tool_result>\nError: Tool '{tool_name}' requires arguments: {', '.join(required_args)}. Please provide complete arguments.\n</tool_result>\n\nassistant\n"
-                    continue
-                
-                logger.info(f"Executing tool: {tool_name} with args: {list(tool_args.keys())}")
-                
-                # Reset JSON parse failure counter on successful parse
-                json_parse_failures = 0
-                
-                if status_callback:
-                    try:
-                        await status_callback(f"🔧 Calling: `{tool_name}`\n```json\n{json.dumps(tool_args, indent=2)}\n```")
-                    except Exception as e:
-                        logger.warning(f"Status callback failed: {e}")
-                
-                tool = get_tool(tool_name, user_id=user_id)
-                if tool:
-                    result = await execute_tool_with_timeout(tool, tool_args)
-                    
-                    # Check for file data (from skills)
-                    if result.file_data:
-                        pending_file_data = result.file_data
-                        result_text = f"File ready: {result.file_data.get('filename', 'file')}"
-                        logger.info(f"Tool {tool_name} returned file: {result.file_data.get('filename')}")
-                    elif result.success:
-                        result_text = truncate_tool_output(result.output, tool_name)
-                        logger.info(f"Tool {tool_name} succeeded, output length: {len(result.output)}, truncated to: {len(result_text)}")
-                    else:
-                        result_text = f"Error: {result.error}"
-                        logger.warning(f"Tool {tool_name} failed: {result.error}")
-                    
-                    # Track last tool result for fallback
-                    last_tool_result = {"tool": tool_name, "result": result_text, "success": result.success}
-                    
-                    # Add to prompt for next iteration (LLM will interpret this)
-                    full_prompt += f"{response_part}\n\n<tool_result>\n{result_text}\n</tool_result>\n\nassistant\n"
-                    
-                else:
-                    error_text = f"Unknown tool: {tool_name}"
-                    logger.warning(error_text)
-                    full_prompt += f"{response_part}\n\n<tool_result>\n{error_text}\n</tool_result>\n\nassistant\n"
-                
-            except json.JSONDecodeError as e:
+        if parsed_tool:
+            tool_name = parsed_tool["tool"]
+            tool_args = parsed_tool["args"]
+            
+            # Validate: tools that typically need args should have non-empty args
+            TOOLS_REQUIRING_ARGS = {
+                "run_bash": ["script"],
+                "run_python": ["script"],
+                "exec": ["command"],
+                "read_file": ["path"],
+                "write_file": ["path", "content"],
+                "edit_file": ["path"],
+                "replace_in_file": ["path", "start_line", "end_line", "new_content"],
+                "memory_update": ["content"],
+                "memory_log": ["content"],
+                "user_update": ["data"],
+            }
+            
+            required_args = TOOLS_REQUIRING_ARGS.get(tool_name, [])
+            missing_args = [arg for arg in required_args if arg not in tool_args or not tool_args[arg]]
+            
+            if missing_args:
+                logger.warning(f"Tool {tool_name} missing required args: {missing_args}, skipping execution")
                 json_parse_failures += 1
-                error_text = f"Invalid tool call JSON (attempt {json_parse_failures}/{MAX_JSON_FAILURES}): {e}"
-                logger.warning(f"Failed to parse tool call ({json_parse_failures}/{MAX_JSON_FAILURES}): {tool_json[:200]}")
                 
                 if json_parse_failures >= MAX_JSON_FAILURES:
-                    logger.error(f"Too many JSON parse failures ({MAX_JSON_FAILURES}), aborting agent loop")
+                    logger.error(f"Too many parse failures ({MAX_JSON_FAILURES}), aborting agent loop")
                     accumulated_response = (
                         "Maaf, saya mengalami kesulitan teknis dalam memformat perintah. "
                         "Silakan coba lagi dengan permintaan yang lebih sederhana, "
@@ -908,7 +787,53 @@ async def run_agent(
                     )
                     break
                 
-                full_prompt += f"{response_part}\n\n<tool_result>\n{error_text}. Please output valid JSON inside <tool_call> tags. Keep the args simple and short.\n</tool_result>\n\nassistant\n"
+                full_prompt += f"{response_part}\n\n<tool_result>\nError: Tool '{tool_name}' requires arguments: {', '.join(required_args)}. Please provide complete arguments.\n</tool_result>\n\nassistant\n"
+                continue
+            
+            logger.info(f"Executing tool: {tool_name} with args: {list(tool_args.keys())}")
+            
+            # Reset failure counter on successful parse
+            json_parse_failures = 0
+            
+            if status_callback:
+                try:
+                    # Truncate large args for display (e.g., file content)
+                    display_args = {}
+                    for k, v in tool_args.items():
+                        if isinstance(v, str) and len(v) > 200:
+                            display_args[k] = v[:200] + f"... ({len(v)} chars)"
+                        else:
+                            display_args[k] = v
+                    await status_callback(f"🔧 Calling: `{tool_name}`\n```json\n{json.dumps(display_args, indent=2)}\n```")
+                except Exception as e:
+                    logger.warning(f"Status callback failed: {e}")
+            
+            tool = get_tool(tool_name, user_id=user_id)
+            if tool:
+                result = await execute_tool_with_timeout(tool, tool_args)
+                
+                # Check for file data (from skills)
+                if result.file_data:
+                    pending_file_data = result.file_data
+                    result_text = f"File ready: {result.file_data.get('filename', 'file')}"
+                    logger.info(f"Tool {tool_name} returned file: {result.file_data.get('filename')}")
+                elif result.success:
+                    result_text = truncate_tool_output(result.output, tool_name)
+                    logger.info(f"Tool {tool_name} succeeded, output length: {len(result.output)}, truncated to: {len(result_text)}")
+                else:
+                    result_text = f"Error: {result.error}"
+                    logger.warning(f"Tool {tool_name} failed: {result.error}")
+                
+                # Track last tool result for fallback
+                last_tool_result = {"tool": tool_name, "result": result_text, "success": result.success}
+                
+                # Add to prompt for next iteration (LLM will interpret this)
+                full_prompt += f"{response_part}\n\n<tool_result>\n{result_text}\n</tool_result>\n\nassistant\n"
+                
+            else:
+                error_text = f"Unknown tool: {tool_name}"
+                logger.warning(error_text)
+                full_prompt += f"{response_part}\n\n<tool_result>\n{error_text}\n</tool_result>\n\nassistant\n"
         else:
             # No tool call, this is the final response
             logger.debug("No tool call found, finishing agent loop")

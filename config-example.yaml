@@ -60,6 +60,7 @@ agent:
   tool_timeout: 30        # Seconds per tool execution
   total_timeout: 300      # 5 min max per conversation turn
   retry_attempts: 3       # LLM retry on failure
+  show_tool_calls: false  # Show raw tool_call JSON in stream (debug mode)
 
 # Tool settings
 tools:

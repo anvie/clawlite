@@ -85,7 +85,7 @@ LLM_MAX_RETRIES = config_get('agent.retry_attempts', 3)
 LLM_RETRY_DELAY = 2  # base delay for exponential backoff
 TOTAL_TIME_LIMIT = config_get('agent.total_timeout', 300)
 SHOW_TOOL_CALLS = config_get('agent.show_tool_calls', False)  # Show raw tool_call in stream (debug)
-DEBUG_TOOL_ERRORS = config_get('agent.debug_tool_errors', False)  # Send failed tool calls as separate message
+DEBUG_TOOL_ERRORS = config_get('agent.debug_tool_errors', True)  # Send failed tool calls as separate message
 
 # Per-tool output limits (chars) - larger for code reading tools
 TOOL_OUTPUT_LIMITS = {

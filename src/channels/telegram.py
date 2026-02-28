@@ -341,8 +341,9 @@ class TelegramChannel(BaseChannel):
         """Send a debug alert for failed tool calls as a separate Telegram message."""
         try:
             import json as _json
+            from html import escape as html_escape
             
-            tool_name = tool_info.get("tool", "unknown")
+            tool_name = html_escape(tool_info.get("tool", "unknown"))
             exit_code = tool_info.get("exit_code")
             error = tool_info.get("result", "")
             duration = tool_info.get("duration_ms", 0)
@@ -356,30 +357,29 @@ class TelegramChannel(BaseChannel):
                 else:
                     display_args[k] = v
             
-            parts = [f"⚠️ *Tool Failed:* `{tool_name}`"]
+            parts = [f"⚠️ <b>Tool Failed:</b> <code>{tool_name}</code>"]
             if exit_code is not None:
-                parts.append(f"*Exit code:* `{exit_code}`")
-            parts.append(f"*Duration:* {duration}ms")
+                parts.append(f"<b>Exit code:</b> <code>{exit_code}</code>")
+            parts.append(f"<b>Duration:</b> {duration}ms")
             if error:
-                # Escape markdown special chars in error
-                safe_error = error[:500].replace("_", "\\_").replace("*", "\\*").replace("`", "\\`")
-                parts.append(f"*Error:* {safe_error}")
+                safe_error = html_escape(error[:500])
+                parts.append(f"<b>Error:</b> {safe_error}")
             if display_args:
                 args_str = _json.dumps(display_args, indent=2, ensure_ascii=False)
                 if len(args_str) > 500:
                     args_str = args_str[:500] + "..."
-                parts.append(f"*Args:*\n```json\n{args_str}\n```")
+                parts.append(f"<b>Args:</b>\n<pre>{html_escape(args_str)}</pre>")
             
             text = "\n".join(parts)
             
             await self.application.bot.send_message(
                 chat_id=int(chat_id),
                 text=text,
-                parse_mode="Markdown",
+                parse_mode="HTML",
             )
         except Exception as e:
             self.logger.warning(f"Failed to send debug alert: {e}")
-            # Fallback without markdown
+            # Fallback without formatting
             try:
                 fallback = f"⚠️ Tool Failed: {tool_info.get('tool', '?')}\nError: {tool_info.get('result', '?')[:300]}"
                 await self.application.bot.send_message(chat_id=int(chat_id), text=fallback)

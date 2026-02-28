@@ -372,7 +372,7 @@ class TelegramChannel(BaseChannel):
             
             text = "\n".join(parts)
             
-            await self.app.bot.send_message(
+            await self.application.bot.send_message(
                 chat_id=int(chat_id),
                 text=text,
                 parse_mode="Markdown",
@@ -382,7 +382,7 @@ class TelegramChannel(BaseChannel):
             # Fallback without markdown
             try:
                 fallback = f"⚠️ Tool Failed: {tool_info.get('tool', '?')}\nError: {tool_info.get('result', '?')[:300]}"
-                await self.app.bot.send_message(chat_id=int(chat_id), text=fallback)
+                await self.application.bot.send_message(chat_id=int(chat_id), text=fallback)
             except Exception:
                 pass
     

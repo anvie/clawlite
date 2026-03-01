@@ -60,10 +60,12 @@ if [ -f "/app/.owner" ]; then
 fi
 
 # Run the main application as non-root user
+# Note: cd /app is required for Python module loading (src.main)
+# Container working_dir can be /workspace for shell commands
 if [ "$(id -u)" = "0" ]; then
     echo "🚀 Starting ClawLite as $RUN_USER..."
-    exec gosu "$RUN_USER" python -m src.main "$@"
+    exec gosu "$RUN_USER" bash -c "cd /app && python -m src.main $*"
 else
     # Already running as non-root (e.g., docker run --user)
-    exec python -m src.main "$@"
+    cd /app && exec python -m src.main "$@"
 fi

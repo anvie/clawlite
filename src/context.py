@@ -1,6 +1,7 @@
 """Context loader with user isolation and mtime-based caching."""
 
 import os
+import re
 import threading
 from dataclasses import dataclass
 from datetime import date, timedelta
@@ -70,6 +71,37 @@ def clear_cache() -> None:
         _cache.clear()
 
 
+def preprocess_role_content(content: str, is_admin: bool) -> str:
+    """
+    Strip role-based sections from content.
+    
+    Tags:
+    - <role:admin>...</role:admin> — only kept for admin/owner
+    - <role:guest>...</role:guest> — only kept for regular users
+    
+    Args:
+        content: Raw file content with role tags
+        is_admin: True if user is admin/owner
+    
+    Returns:
+        Preprocessed content with irrelevant role sections removed
+    """
+    if is_admin:
+        # Keep admin sections, remove guest sections
+        content = re.sub(r'<role:guest>.*?</role:guest>', '', content, flags=re.DOTALL)
+        # Remove admin tags but keep content inside
+        content = re.sub(r'</?role:admin>', '', content)
+    else:
+        # Keep guest sections, remove admin sections
+        content = re.sub(r'<role:admin>.*?</role:admin>', '', content, flags=re.DOTALL)
+        # Remove guest tags but keep content inside
+        content = re.sub(r'</?role:guest>', '', content)
+    
+    # Clean up multiple blank lines (3+ newlines → 2)
+    content = re.sub(r'\n{3,}', '\n\n', content)
+    return content.strip()
+
+
 def get_user_dir(user_id: str) -> Path:
     """Get the user's directory path."""
     return Path(WORKSPACE_DIR) / "users" / str(user_id)
@@ -118,16 +150,36 @@ def read_file_safe(path: Path) -> Optional[str]:
     return None
 
 
-def load_shared_context() -> str:
-    """Load shared context files (SOUL.md, AGENTS.md, CONTEXT.md, TOOLS.md)."""
+def load_shared_context(user_id: str = None) -> str:
+    """
+    Load shared context files (SOUL.md, AGENTS.md, CONTEXT.md, TOOLS.md).
+    
+    Applies role-based preprocessing if user_id is provided:
+    - Admin/owner sees <role:admin> sections
+    - Regular users see <role:guest> sections
+    
+    Args:
+        user_id: Optional user ID for role-based content filtering
+    
+    Returns:
+        Combined context string
+    """
+    from .access import is_admin as check_admin
+    
     workspace = Path(WORKSPACE_DIR)
     parts = []
+    
+    # Determine if user is admin/owner
+    user_is_admin = check_admin(user_id) if user_id else False
     
     # Shared files in order: Identity → Rules → Domain → Tools (notes only)
     for filename in ["SOUL.md", "AGENTS.md", "CONTEXT.md", "TOOLS.md"]:
         content = read_file_cached(workspace / filename)
         if content:
-            parts.append(f"## {filename}\n\n{content}")
+            # Apply role-based preprocessing
+            content = preprocess_role_content(content, user_is_admin)
+            if content:  # Only add if content remains after preprocessing
+                parts.append(f"## {filename}\n\n{content}")
     
     return "\n\n---\n\n".join(parts)
 
@@ -163,7 +215,7 @@ def load_user_context(user_id: str) -> str:
 
 def load_full_context(user_id: str) -> str:
     """Load complete context for a user (shared + user-specific)."""
-    shared = load_shared_context()
+    shared = load_shared_context(user_id)  # Pass user_id for role-based filtering
     user = load_user_context(user_id)
     
     parts = []

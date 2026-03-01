@@ -8,6 +8,7 @@ set -e
 
 WORKSPACE="/workspace"
 TEMPLATES="/app/templates"
+TEMPLATE_BIN="/app/template-bin"
 RUN_USER="clawlite"
 
 # Start cron daemon (requires root)
@@ -53,6 +54,14 @@ fi
 
 # Ensure workspace ownership
 chown -R "$RUN_USER:$RUN_USER" "$WORKSPACE" 2>/dev/null || true
+
+# Copy template binaries if present (e.g., krasan, krasan-admin)
+if [ -d "$TEMPLATE_BIN" ] && [ "$(ls -A $TEMPLATE_BIN 2>/dev/null)" ]; then
+    echo "📦 Installing template binaries..."
+    cp -f "$TEMPLATE_BIN"/* /usr/local/bin/ 2>/dev/null || true
+    chmod +x /usr/local/bin/* 2>/dev/null || true
+    echo "✓ Template binaries installed"
+fi
 
 # Ensure owner file is writable by app (for first-user-as-admin)
 if [ -f "/app/.owner" ]; then

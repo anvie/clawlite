@@ -16,13 +16,12 @@ logger = logging.getLogger("clawlite.cli.instances")
 CLAWLITE_IMAGE = "clawlite:latest"
 
 # Docker compose template
-DOCKER_COMPOSE_TEMPLATE = """version: '3.8'
-
-services:
+DOCKER_COMPOSE_TEMPLATE = """services:
   clawlite:
     image: clawlite:latest
     container_name: clawlite-{instance_name}
     restart: unless-stopped
+    working_dir: /workspace
     
     ports:
       - "${{API_PORT:-{api_port}}}:8080"
@@ -35,10 +34,16 @@ services:
       - ./config.yaml:/app/config.yaml:ro
       - ./skills:/app/skills:ro
       - ./owner:/app/.owner:rw
+{bin_mount}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     
     tmpfs:
       - /tmp:size=100m,mode=1777
 """
+
+# Optional bin mount line (added if bin/ directory exists)
+BIN_MOUNT_LINE = "      - ./bin:/app/template-bin:ro"
 
 
 def get_clawlite_source() -> str:
@@ -389,10 +394,15 @@ def create_instance(
     # Generate docker-compose.yml if not from template
     compose_file = os.path.join(instance_path, "docker-compose.yml")
     if not os.path.exists(compose_file):
+        # Check if template has bin/ directory
+        bin_path = os.path.join(instance_path, "bin")
+        bin_mount = BIN_MOUNT_LINE if os.path.isdir(bin_path) else ""
+        
         with open(compose_file, "w") as f:
             f.write(DOCKER_COMPOSE_TEMPLATE.format(
                 instance_name=instance_name,
                 api_port=api_port,
+                bin_mount=bin_mount,
             ))
     
     # Generate config.yaml if not from template

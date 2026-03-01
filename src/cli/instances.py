@@ -23,6 +23,9 @@ DOCKER_COMPOSE_TEMPLATE = """services:
     restart: unless-stopped
     working_dir: /workspace
     
+    environment:
+      - TZ=Asia/Jakarta
+    
     ports:
       - "${{API_PORT:-{api_port}}}:8080"
     
@@ -418,12 +421,17 @@ def create_instance(
     env_file = os.path.join(instance_path, ".env")
     env_example = os.path.join(instance_path, ".env.example")
     if not os.path.exists(env_file):
-        content = ENV_TEMPLATE.format(instance_name=instance_name)
-        with open(env_file, "w") as f:
-            f.write(content)
-        # Also create .env.example
-        with open(env_example, "w") as f:
-            f.write(content)
+        # If template provided .env.example, copy it to .env (variables already substituted)
+        if os.path.exists(env_example):
+            import shutil
+            shutil.copy(env_example, env_file)
+        else:
+            # No template .env.example, use default
+            content = ENV_TEMPLATE.format(instance_name=instance_name)
+            with open(env_file, "w") as f:
+                f.write(content)
+            with open(env_example, "w") as f:
+                f.write(content)
     
     # Create default workspace files if not from template
     soul_file = os.path.join(workspace_path, "SOUL.md")

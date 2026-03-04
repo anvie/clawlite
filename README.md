@@ -1,6 +1,6 @@
 # ClawLite
 
-A lightweight agentic AI assistant with multi-channel support. Connect via Telegram or WhatsApp, powered by LLMs with tool-calling capabilities.
+A lightweight agentic AI framework with multi-channel support. Connect via Telegram or WhatsApp, powered by LLMs with tool-calling capabilities.
 
 ## Features
 

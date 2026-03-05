@@ -6,6 +6,7 @@ Telegram bot implementation using python-telegram-bot
 import os
 import base64
 import logging
+import asyncio
 from datetime import datetime
 from typing import Optional
 
@@ -38,6 +39,7 @@ class TelegramChannel(BaseChannel):
         self.token = os.getenv("TELEGRAM_TOKEN")
         self.application: Optional[Application] = None
         self.conversations: dict[str, list[dict]] = {}  # Now keyed by prefixed user_id
+        self._active_tasks: dict[str, asyncio.Task] = {}  # Track running LLM tasks per user
     
     async def start(self) -> None:
         """Start the Telegram bot."""
@@ -48,6 +50,7 @@ class TelegramChannel(BaseChannel):
         
         # Register handlers
         self.application.add_handler(CommandHandler("start", self._cmd_start))
+        self.application.add_handler(CommandHandler("stop", self._cmd_stop))
         self.application.add_handler(CommandHandler("clear", self._cmd_clear))
         self.application.add_handler(CommandHandler("tools", self._cmd_tools))
         self.application.add_handler(CommandHandler("workspace", self._cmd_workspace))
@@ -117,11 +120,26 @@ class TelegramChannel(BaseChannel):
             f"• 💻 Menjalankan command (terbatas)\n"
             f"• 🧠 Berpikir step-by-step\n\n"
             f"Commands:\n"
+            f"/stop - Stop current generation\n"
             f"/clear - Hapus history\n"
             f"/tools - List available tools\n"
             f"/workspace - Lihat isi workspace",
             parse_mode="Markdown"
         )
+    
+    async def _cmd_stop(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handle /stop command - cancel running LLM task."""
+        user_id = self.format_user_id(update.effective_user.id)
+        if not self.is_allowed(user_id):
+            return
+        
+        task = self._active_tasks.get(user_id)
+        if task and not task.done():
+            task.cancel()
+            self.logger.info(f"🛑 Cancelled task for {user_id}")
+            await update.message.reply_text("🛑 Stopped.")
+        else:
+            await update.message.reply_text("ℹ️ Nothing running.")
     
     async def _cmd_clear(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle /clear command."""
@@ -249,7 +267,8 @@ class TelegramChannel(BaseChannel):
             async def _debug_cb(uid: str, tool_info: dict):
                 await self.send_debug_alert(raw_chat_id, tool_info)
             
-            result = await run_agent(
+            # Create task and track it for /stop support
+            agent_coro = run_agent(
                 user_message,
                 self.conversations[user_id],
                 user_id=user_id,
@@ -257,6 +276,14 @@ class TelegramChannel(BaseChannel):
                 debug_callback=_debug_cb if DEBUG_TOOL_ERRORS else None,
                 images=images,
             )
+            task = asyncio.create_task(agent_coro)
+            self._active_tasks[user_id] = task
+            
+            try:
+                result = await task
+            finally:
+                # Clean up task reference
+                self._active_tasks.pop(user_id, None)
             
             self.conversations[user_id] = result.history
             
@@ -281,6 +308,10 @@ class TelegramChannel(BaseChannel):
             
             # Send response in chunks
             await self._send_chunked(update, status_msg, final_text)
+        
+        except asyncio.CancelledError:
+            self.logger.info(f"🛑 Task cancelled for {user_id}")
+            await status_msg.edit_text("🛑 Stopped.")
             
         except Exception as e:
             self.logger.error(f"Error for user {user_id}: {e}")

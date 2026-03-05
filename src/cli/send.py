@@ -14,8 +14,8 @@ import asyncio
 import httpx
 
 # Load env
-from dotenv import load_dotenv
-load_dotenv()
+from ..env_loader import load_env
+load_env()
 
 
 def parse_user_id(user_id: str) -> tuple[str, str]:

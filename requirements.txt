@@ -18,3 +18,7 @@ trafilatura>=2.0.0
 croniter>=2.0.0
 aiohttp>=3.9.0
 pytz>=2024.1
+
+# Encrypted env support (optional)
+# Install: pip install git+https://github.com/aisyahsyihab/envcrypt#subdirectory=envcrypt-py
+cryptography>=3.4  # Required by envcrypt

@@ -9,10 +9,10 @@ import sys
 import asyncio
 import signal
 import logging
-from dotenv import load_dotenv
+from .env_loader import load_env
 
 # Load environment variables
-load_dotenv()
+load_env()
 
 # Import config to get logging level
 from .config import get as config_get

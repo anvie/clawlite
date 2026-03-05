@@ -24,14 +24,14 @@ warnings.warn(
 )
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
-from dotenv import load_dotenv
+from .env_loader import load_env
 
 from .agent import run_agent
 
 # Workspace path for file operations
 WORKSPACE = os.getenv("WORKSPACE_PATH", "/workspace")
 
-load_dotenv()
+load_env()
 
 # Configuration
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")

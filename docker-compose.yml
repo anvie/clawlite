@@ -17,6 +17,10 @@ services:
     # Environment
     env_file:
       - .env
+    environment:
+      # For encrypted .env support, set ENVCRYPT_KEY here or in .env
+      # ENVCRYPT_KEY: "your-64-char-hex-key"
+      - TZ=${TZ:-UTC}
     
     # Volumes
     volumes:

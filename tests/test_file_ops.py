@@ -256,6 +256,139 @@ class TestEditFileTool:
         assert result.success is False
         assert "outside workspace" in result.error.lower()
 
+    # === Line-based editing tests ===
+
+    @pytest.mark.asyncio
+    async def test_replace_lines(self, tool, workspace, regular_user_id):
+        """Should replace specific lines."""
+        # Create test file
+        filepath = os.path.join(workspace, "lines.txt")
+        with open(filepath, "w") as f:
+            f.write("line 1\nline 2\nline 3\nline 4\nline 5\n")
+        
+        tool.user_id = regular_user_id
+        result = await tool.execute(
+            path="lines.txt",
+            start_line=2,
+            end_line=3,
+            content="replaced line A\nreplaced line B\n"
+        )
+        
+        assert result.success is True
+        assert "Replaced lines 2-3" in result.output
+        
+        with open(filepath) as f:
+            content = f.read()
+        assert content == "line 1\nreplaced line A\nreplaced line B\nline 4\nline 5\n"
+        
+        # Cleanup
+        os.remove(filepath)
+
+    @pytest.mark.asyncio
+    async def test_insert_after_line(self, tool, workspace, regular_user_id):
+        """Should insert content after specified line."""
+        filepath = os.path.join(workspace, "insert.txt")
+        with open(filepath, "w") as f:
+            f.write("line 1\nline 2\nline 3\n")
+        
+        tool.user_id = regular_user_id
+        result = await tool.execute(
+            path="insert.txt",
+            after_line=2,
+            content="inserted A\ninserted B\n"
+        )
+        
+        assert result.success is True
+        assert "Inserted 2 lines after line 2" in result.output
+        
+        with open(filepath) as f:
+            content = f.read()
+        assert content == "line 1\nline 2\ninserted A\ninserted B\nline 3\n"
+        
+        # Cleanup
+        os.remove(filepath)
+
+    @pytest.mark.asyncio
+    async def test_insert_at_beginning(self, tool, workspace, regular_user_id):
+        """Should insert at beginning when after_line=0."""
+        filepath = os.path.join(workspace, "insert_begin.txt")
+        with open(filepath, "w") as f:
+            f.write("line 1\nline 2\n")
+        
+        tool.user_id = regular_user_id
+        result = await tool.execute(
+            path="insert_begin.txt",
+            after_line=0,
+            content="header\n"
+        )
+        
+        assert result.success is True
+        assert "at beginning" in result.output
+        
+        with open(filepath) as f:
+            content = f.read()
+        assert content == "header\nline 1\nline 2\n"
+        
+        # Cleanup
+        os.remove(filepath)
+
+    @pytest.mark.asyncio
+    async def test_delete_lines(self, tool, workspace, regular_user_id):
+        """Should delete specified lines."""
+        filepath = os.path.join(workspace, "delete.txt")
+        with open(filepath, "w") as f:
+            f.write("line 1\nline 2\nline 3\nline 4\nline 5\n")
+        
+        tool.user_id = regular_user_id
+        result = await tool.execute(
+            path="delete.txt",
+            start_line=2,
+            end_line=4,
+            delete=True
+        )
+        
+        assert result.success is True
+        assert "Deleted lines 2-4" in result.output
+        
+        with open(filepath) as f:
+            content = f.read()
+        assert content == "line 1\nline 5\n"
+        
+        # Cleanup
+        os.remove(filepath)
+
+    @pytest.mark.asyncio
+    async def test_replace_lines_invalid_range(self, tool, workspace, regular_user_id):
+        """Should fail with invalid line range."""
+        filepath = os.path.join(workspace, "range.txt")
+        with open(filepath, "w") as f:
+            f.write("line 1\nline 2\n")
+        
+        tool.user_id = regular_user_id
+        
+        # start > end
+        result = await tool.execute(
+            path="range.txt",
+            start_line=3,
+            end_line=1,
+            content="test"
+        )
+        assert result.success is False
+        assert "end_line must be >= start_line" in result.error
+        
+        # start > total lines
+        result = await tool.execute(
+            path="range.txt",
+            start_line=10,
+            end_line=15,
+            content="test"
+        )
+        assert result.success is False
+        assert "exceeds file length" in result.error
+        
+        # Cleanup
+        os.remove(filepath)
+
 
 class TestListDirTool:
     """Tests for list_dir tool."""

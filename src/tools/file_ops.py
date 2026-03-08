@@ -104,202 +104,244 @@ class WriteFileTool(Tool):
 
 class EditFileTool(Tool):
     name = "edit_file"
-    description = """✅ PREFERRED for updating existing files (AGENTS.md, TOOLS.md, etc.). Safer than write_file - won't lose data!
-Regular users: workspace only. Admin/owner: any path.
+    description = """✅ PREFERRED for updating existing files. Supports both text-based and line-based editing.
 
-Modes:
-1. Search/replace: provide old_text and new_text (old_text must match exactly once) - SAFEST
-2. Append: set append=true to add content at end of file
-3. Prepend: set prepend=true to add content at beginning of file
+MODES:
 
-More token-efficient than write_file for small changes."""
-    
+1. SEARCH/REPLACE (text-based):
+   old_text + new_text → find and replace exact text (must match once)
+
+2. APPEND/PREPEND:
+   content + append=true → add to end of file
+   content + prepend=true → add to beginning of file
+
+3. REPLACE LINES (line-based):
+   start_line + end_line + content → replace lines with new content
+
+4. INSERT LINES:
+   after_line + content → insert content after specified line
+   (use after_line=0 to insert at beginning)
+
+5. DELETE LINES:
+   start_line + end_line + delete=true → remove lines
+
+Line numbers are 1-indexed. Regular users: workspace only. Admin: any path."""
+
     parameters = {
         "path": "string - relative path to file",
-        "old_text": "string - exact text to find and replace (for search/replace mode)",
-        "new_text": "string - replacement text (for search/replace mode)",
-        "content": "string - content to add (for append/prepend mode)",
-        "append": "boolean - if true, append content to end of file",
-        "prepend": "boolean - if true, prepend content to beginning of file",
+        # Text-based params
+        "old_text": "string - exact text to find and replace",
+        "new_text": "string - replacement text",
+        # Append/prepend params
+        "content": "string - content to add/insert",
+        "append": "boolean - add content at end of file",
+        "prepend": "boolean - add content at beginning of file",
+        # Line-based params
+        "start_line": "int - first line number (1-indexed, for replace/delete)",
+        "end_line": "int - last line number (1-indexed, inclusive)",
+        "after_line": "int - insert content after this line (0 = insert at beginning)",
+        "delete": "boolean - if true with start_line/end_line, delete those lines",
     }
-    
+
     async def execute(
         self,
         path: str = "",
+        # Text-based
         old_text: str = "",
         new_text: str = "",
+        # Append/prepend
         content: str = "",
         append: bool = False,
         prepend: bool = False,
+        # Line-based
+        start_line: int = 0,
+        end_line: int = 0,
+        after_line: int = -1,  # -1 means not set, 0 means insert at beginning
+        delete: bool = False,
         **kwargs
     ) -> ToolResult:
         try:
             full_path = self.validate_path(path)
-            
+
             if not os.path.exists(full_path):
                 return ToolResult(False, "", f"File not found: {path}")
-            
+
             if not os.path.isfile(full_path):
                 return ToolResult(False, "", f"Not a file: {path}")
-            
+
             # Read current content
             with open(full_path, "r", encoding="utf-8", errors="replace") as f:
                 file_content = f.read()
-            
+
+            lines = file_content.splitlines(keepends=True)
+            total_lines = len(lines)
+
             # Determine mode and apply edit
-            if append and content:
-                # Append mode
-                new_content = file_content + content
-                mode_desc = f"Appended {len(content)} chars"
-                
-            elif prepend and content:
-                # Prepend mode
-                new_content = content + file_content
-                mode_desc = f"Prepended {len(content)} chars"
-                
-            elif old_text and new_text is not None:
-                # Search/replace mode
+            mode_desc = ""
+            new_content = ""
+
+            # === MODE 1: Search/Replace (text-based) ===
+            if old_text:
                 if old_text not in file_content:
-                    # Show context to help debug
                     preview = file_content[:500] + "..." if len(file_content) > 500 else file_content
                     return ToolResult(
                         False, "",
-                        f"old_text not found in file. File preview:\n{preview}"
+                        f"old_text not found in file. Preview:\n{preview}"
                     )
-                
-                # Count occurrences
+
                 count = file_content.count(old_text)
                 if count > 1:
                     return ToolResult(
                         False, "",
-                        f"old_text found {count} times. Please provide more context to match exactly once."
+                        f"old_text found {count} times. Provide more context to match exactly once."
                     )
-                
-                new_content = file_content.replace(old_text, new_text, 1)
-                mode_desc = f"Replaced {len(old_text)} chars with {len(new_text)} chars"
-                
-            elif old_text and new_text == "":
-                # Delete mode (replace with empty string)
-                if old_text not in file_content:
-                    return ToolResult(False, "", "old_text not found in file")
-                
-                count = file_content.count(old_text)
-                if count > 1:
-                    return ToolResult(
-                        False, "",
-                        f"old_text found {count} times. Please provide more context to match exactly once."
-                    )
-                
-                new_content = file_content.replace(old_text, "", 1)
-                mode_desc = f"Deleted {len(old_text)} chars"
-                
+
+                if new_text == "":
+                    # Delete mode
+                    new_content = file_content.replace(old_text, "", 1)
+                    mode_desc = f"Deleted {len(old_text)} chars"
+                else:
+                    new_content = file_content.replace(old_text, new_text, 1)
+                    mode_desc = f"Replaced {len(old_text)} chars with {len(new_text)} chars"
+
+            # === MODE 2: Append ===
+            elif append and content:
+                new_content = file_content + content
+                mode_desc = f"Appended {len(content)} chars"
+
+            # === MODE 3: Prepend ===
+            elif prepend and content:
+                new_content = content + file_content
+                mode_desc = f"Prepended {len(content)} chars"
+
+            # === MODE 4: Replace Lines ===
+            elif start_line > 0 and end_line > 0 and not delete:
+                result = self._replace_lines(lines, start_line, end_line, content, total_lines)
+                if not result[0]:
+                    return ToolResult(False, "", result[1])
+                new_content = result[1]
+                mode_desc = result[2]
+
+            # === MODE 5: Insert After Line ===
+            elif after_line >= 0 and content:
+                result = self._insert_after(lines, after_line, content, total_lines)
+                if not result[0]:
+                    return ToolResult(False, "", result[1])
+                new_content = result[1]
+                mode_desc = result[2]
+
+            # === MODE 6: Delete Lines ===
+            elif start_line > 0 and end_line > 0 and delete:
+                result = self._delete_lines(lines, start_line, end_line, total_lines)
+                if not result[0]:
+                    return ToolResult(False, "", result[1])
+                new_content = result[1]
+                mode_desc = result[2]
+
             else:
                 return ToolResult(
                     False, "",
-                    "Invalid parameters. Use either: (1) old_text + new_text for replace, "
-                    "(2) content + append=true, or (3) content + prepend=true"
+                    "Invalid parameters. Use one of:\n"
+                    "1. old_text + new_text (search/replace)\n"
+                    "2. content + append=true (append)\n"
+                    "3. content + prepend=true (prepend)\n"
+                    "4. start_line + end_line + content (replace lines)\n"
+                    "5. after_line + content (insert after line)\n"
+                    "6. start_line + end_line + delete=true (delete lines)"
                 )
-            
+
             # Size limit check
             if len(new_content.encode("utf-8")) > 1_000_000:
                 return ToolResult(False, "", "Resulting file too large (>1MB)")
-            
+
             # Write back
             with open(full_path, "w", encoding="utf-8") as f:
                 f.write(new_content)
-            
+
             return ToolResult(True, f"{mode_desc} in {path}")
-            
+
         except ValueError as e:
             return ToolResult(False, "", str(e))
         except Exception as e:
             return ToolResult(False, "", f"Error editing file: {e}")
 
+    def _replace_lines(self, lines: list, start: int, end: int, content: str, total: int) -> tuple:
+        """Replace lines start through end (inclusive) with content.
+        Returns: (success, result_or_error, description)
+        """
+        if start < 1:
+            return (False, "start_line must be >= 1", "")
+        if end < start:
+            return (False, "end_line must be >= start_line", "")
+        if start > total:
+            return (False, f"start_line ({start}) exceeds file length ({total} lines)", "")
 
-class ReplaceInFileTool(Tool):
-    name = "replace_in_file"
-    description = """Replace text in a file using line numbers. More reliable than edit_file for code changes.
-Read the file first to find exact line numbers, then specify the range to replace.
-Regular users: workspace only. Admin/owner: any path.
+        # Clamp end to file length
+        end = min(end, total)
 
-⚠️ PREFERRED over edit_file/write_file for modifying code — smaller JSON args, less error-prone."""
-    parameters = {
-        "path": "string - relative path to file (or absolute for admin)",
-        "start_line": "int - first line to replace (1-indexed, inclusive)",
-        "end_line": "int - last line to replace (1-indexed, inclusive)",
-        "new_content": "string - replacement content (will replace lines start_line through end_line)",
-    }
+        # Ensure content ends with newline
+        if content and not content.endswith("\n"):
+            content += "\n"
 
-    async def execute(
-        self,
-        path: str = "",
-        start_line: int = 0,
-        end_line: int = 0,
-        new_content: str = "",
-        **kwargs,
-    ) -> ToolResult:
-        try:
-            full_path = self.validate_path(path)
+        before = lines[:start - 1]
+        after = lines[end:]
+        new_lines = content.splitlines(keepends=True) if content else []
 
-            if not os.path.exists(full_path):
-                return ToolResult(False, "", f"File not found: {path}")
+        result = "".join(before) + "".join(new_lines) + "".join(after)
+        old_count = end - start + 1
+        new_count = len(new_lines)
 
-            if not os.path.isfile(full_path):
-                return ToolResult(False, "", f"Not a file: {path}")
+        desc = f"Replaced lines {start}-{end} ({old_count} lines) with {new_count} lines"
+        return (True, result, desc)
 
-            with open(full_path, "r", encoding="utf-8", errors="replace") as f:
-                lines = f.readlines()
+    def _insert_after(self, lines: list, after: int, content: str, total: int) -> tuple:
+        """Insert content after specified line. after=0 means insert at beginning.
+        Returns: (success, result_or_error, description)
+        """
+        if after < 0:
+            return (False, "after_line must be >= 0", "")
+        if after > total:
+            return (False, f"after_line ({after}) exceeds file length ({total} lines)", "")
 
-            total_lines = len(lines)
-            start_line = int(start_line)
-            end_line = int(end_line)
+        # Ensure content ends with newline
+        if content and not content.endswith("\n"):
+            content += "\n"
 
-            if start_line < 1 or end_line < 1:
-                return ToolResult(False, "", "start_line and end_line must be >= 1")
+        new_lines = content.splitlines(keepends=True)
 
-            if start_line > end_line:
-                return ToolResult(False, "", "start_line must be <= end_line")
+        if after == 0:
+            result = "".join(new_lines) + "".join(lines)
+            desc = f"Inserted {len(new_lines)} lines at beginning"
+        else:
+            before = lines[:after]
+            after_lines = lines[after:]
+            result = "".join(before) + "".join(new_lines) + "".join(after_lines)
+            desc = f"Inserted {len(new_lines)} lines after line {after}"
 
-            if start_line > total_lines:
-                return ToolResult(
-                    False, "",
-                    f"start_line ({start_line}) exceeds file length ({total_lines} lines)"
-                )
+        return (True, result, desc)
 
-            # Clamp end_line to file length (allow replacing to end of file)
-            if end_line > total_lines:
-                end_line = total_lines
+    def _delete_lines(self, lines: list, start: int, end: int, total: int) -> tuple:
+        """Delete lines start through end (inclusive).
+        Returns: (success, result_or_error, description)
+        """
+        if start < 1:
+            return (False, "start_line must be >= 1", "")
+        if end < start:
+            return (False, "end_line must be >= start_line", "")
+        if start > total:
+            return (False, f"start_line ({start}) exceeds file length ({total} lines)", "")
 
-            # Ensure new_content ends with newline for clean joining
-            if new_content and not new_content.endswith("\n"):
-                new_content += "\n"
+        # Clamp end to file length
+        end = min(end, total)
 
-            # Build new file content
-            before = lines[: start_line - 1]
-            after = lines[end_line:]
-            new_lines = new_content.splitlines(True) if new_content else []
+        before = lines[:start - 1]
+        after = lines[end:]
 
-            result_content = "".join(before) + "".join(new_lines) + "".join(after)
+        result = "".join(before) + "".join(after)
+        deleted_count = end - start + 1
 
-            # Size limit
-            if len(result_content.encode("utf-8")) > 1_000_000:
-                return ToolResult(False, "", "Resulting file too large (>1MB)")
-
-            with open(full_path, "w", encoding="utf-8") as f:
-                f.write(result_content)
-
-            old_count = end_line - start_line + 1
-            new_count = len(new_lines)
-            return ToolResult(
-                True,
-                f"Replaced lines {start_line}-{end_line} ({old_count} lines) "
-                f"with {new_count} lines in {path} (total: {len(before) + new_count + len(after)} lines)",
-            )
-
-        except ValueError as e:
-            return ToolResult(False, "", str(e))
-        except Exception as e:
-            return ToolResult(False, "", f"Error replacing in file: {e}")
+        desc = f"Deleted lines {start}-{end} ({deleted_count} lines)"
+        return (True, result, desc)
 
 
 class ListDirTool(Tool):

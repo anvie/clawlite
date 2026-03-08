@@ -4,7 +4,7 @@ import logging
 from typing import Optional
 
 from .base import Tool, ToolResult
-from .file_ops import ReadFileTool, WriteFileTool, EditFileTool, ReplaceInFileTool, ListDirTool, SendFileTool
+from .file_ops import ReadFileTool, WriteFileTool, EditFileTool, ListDirTool, SendFileTool
 from .shell import ExecTool, RunBashTool
 from .search import GrepTool, FindFilesTool
 from .cron import ListCronTool, AddCronTool, RemoveCronTool
@@ -61,7 +61,6 @@ _ALL_TOOLS = {
     "read_file": ReadFileTool(),
     "write_file": WriteFileTool(),
     "edit_file": EditFileTool(),
-    "replace_in_file": ReplaceInFileTool(),
     "list_dir": ListDirTool(),
     "exec": ExecTool(),
     "run_bash": RunBashTool(),

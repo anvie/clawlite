@@ -92,6 +92,24 @@ When guest provides personal information, save it to their USER.md in
 - Create parent directories automatically
 - Size limits: 2MB per file
 
+## File Editing Best Practices
+
+When asked to find/replace or remove text in files:
+
+1. **READ FIRST** — Always read the file to see actual content
+2. **SEARCH KEYWORD** — Look for the keyword, not assumed full text
+   - ✅ Search for: "check-availability"
+   - ❌ Don't assume: "krasan-admin inquiry check-availability"
+3. **NOTE ALL OCCURRENCES** — There may be multiple patterns to edit
+4. **EXACT MATCH** — Copy exact text from file for old_text parameter
+5. **EDIT ONE BY ONE** — Replace each occurrence separately
+6. **VERIFY** — Read file again to confirm changes applied
+
+Common mistakes:
+- Assuming command format without reading file first
+- Missing occurrences because search was too specific
+- Claiming edit success without verification
+
 ## Token Efficiency
 
 - Never re-read files you just wrote or edited. You know the contents.

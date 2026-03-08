@@ -125,6 +125,12 @@ MODES:
 5. DELETE LINES:
    start_line + end_line + delete=true → remove lines
 
+⚠️ TIPS for search/replace:
+- old_text must match EXACTLY (including whitespace)
+- READ the file first to see actual content before editing
+- For multiple similar patterns, edit one at a time
+- Search for the KEYWORD in the file, don't assume full text format
+
 Line numbers are 1-indexed. Regular users: workspace only. Admin: any path."""
 
     parameters = {

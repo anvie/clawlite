@@ -35,3 +35,18 @@ Rules:
 - Wait for <tool_result> before continuing
 - After receiving results, respond to user in plain text
 - All file paths relative to /workspace
+
+## File Editing Strategy
+
+When asked to find/replace or remove text in files:
+
+1. FIRST: Read the file to see actual content
+2. Search for the KEYWORD (not full assumed text) — e.g., "check-availability" not "krasan-admin inquiry check-availability"
+3. Note ALL occurrences and their exact context
+4. Edit each occurrence one by one with EXACT matching text from the file
+5. Verify changes by reading the file again
+
+Common mistakes to avoid:
+- Assuming command format without reading file first
+- Searching for text that doesn't match exactly (extra spaces, different prefixes)
+- Claiming success without verifying the edit worked

@@ -215,15 +215,21 @@ See [OpenRouter Models](https://openrouter.ai/models) for available models.
 | ------------ | ------------------------------------ | ----------------------------------------------------- |
 | `read_file`  | Read file contents                   | `path`                                                |
 | `write_file` | Create/overwrite file                | `path`, `content`                                     |
-| `edit_file`  | Edit file (search/replace or append) | `path`, `old_text`, `new_text` or `content`, `append` |
+| `edit_file`  | Edit file (text-based or line-based) | See modes below |
 | `list_dir`   | List directory contents              | `path` (default: `.`)                                 |
 
 **`edit_file` modes:**
 
-- **Replace:** `edit_file(path, old_text="find this", new_text="replace with")` — old_text must match exactly once
-- **Append:** `edit_file(path, content="add this", append=true)`
-- **Prepend:** `edit_file(path, content="add this", prepend=true)`
-- **Delete:** `edit_file(path, old_text="remove this", new_text="")`
+Text-based:
+- **Replace:** `edit_file(path, old_text="find", new_text="replace")` — must match exactly once
+- **Append:** `edit_file(path, content="text", append=true)`
+- **Prepend:** `edit_file(path, content="text", prepend=true)`
+- **Delete text:** `edit_file(path, old_text="remove", new_text="")`
+
+Line-based:
+- **Replace lines:** `edit_file(path, start_line=2, end_line=4, content="new content")`
+- **Insert after:** `edit_file(path, after_line=3, content="inserted")` — use `after_line=0` for beginning
+- **Delete lines:** `edit_file(path, start_line=2, end_line=4, delete=true)`
 
 ### Shell Operations
 

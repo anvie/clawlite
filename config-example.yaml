@@ -6,17 +6,26 @@
 
 # LLM settings
 llm:
-  # Provider: ollama | openrouter | anthropic
+  # Provider: ollama | openrouter | llama-server | anthropic
+  # - ollama: Ollama server (native /api/generate endpoint)
+  # - openrouter: OpenRouter API (OpenAI-compatible)
+  # - llama-server: llama.cpp server (OpenAI-compatible, same protocol as openrouter)
+  # - anthropic: Anthropic Claude API
   provider: ollama
   
   # Model name (provider-specific)
   # Ollama: llama3.2:3b, qwen2.5:7b, etc.
   # OpenRouter: google/gemini-2.0-flash-001, anthropic/claude-3.5-sonnet, etc.
+  # llama-server: model loaded by llama-server (usually ignored)
   # Anthropic: claude-sonnet-4-20250514, claude-3-5-haiku-20241022, etc.
   model: llama3.2:3b
   
-  # Ollama host (only for ollama provider)
-  host: http://localhost:11434
+  # Base URL for the LLM API
+  # Ollama: http://localhost:11434
+  # OpenRouter: https://openrouter.ai/api/v1 (default, or custom)
+  # llama-server: http://localhost:8080/v1
+  # Anthropic: https://api.anthropic.com (default)
+  base_url: http://localhost:11434
   
   # Request timeout in seconds
   timeout: 60
@@ -24,6 +33,9 @@ llm:
   # Anthropic-specific settings
   # extended_thinking: true
   # thinking_budget: 10000
+  
+  # llama-server / Qwen3.5 thinking toggle
+  # enable_thinking: true
 
 # Translation layer (ID <-> EN)
 # Useful for models that perform better in English

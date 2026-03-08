@@ -197,26 +197,25 @@ async def run_channels():
 def print_startup_info(api_port: int = 8080):
     """Print startup information."""
     from .config import get as config_get
-    from .llm import get_llm_provider, get_llm_model, get_llm_host
+    from .llm import get_llm_provider, get_llm_model, get_llm_base_url_config
     
     provider = get_llm_provider()
     model = get_llm_model()
+    base_url = get_llm_base_url_config()
+    
+    provider_names = {
+        "anthropic": "Anthropic",
+        "openrouter": "OpenRouter", 
+        "llama-server": "llama-server",
+        "ollama": "Ollama",
+    }
     
     print("\n" + "=" * 50)
     print("🦎 ClawLite - Lightweight Agentic AI")
     print("=" * 50)
-    
-    if provider == "anthropic":
-        print(f"   Provider: Anthropic")
-        print(f"   Model: {model}")
-    elif provider == "openrouter":
-        print(f"   Provider: OpenRouter")
-        print(f"   Model: {model}")
-    else:
-        print(f"   Provider: Ollama")
-        print(f"   Model: {model}")
-        print(f"   Host: {get_llm_host()}")
-    
+    print(f"   Provider: {provider_names.get(provider, provider)}")
+    print(f"   Model: {model}")
+    print(f"   Base URL: {base_url}")
     print(f"   Workspace: {os.getenv('WORKSPACE_PATH', '/workspace')}")
     print(f"   API: http://127.0.0.1:{api_port}")
     print("=" * 50 + "\n")

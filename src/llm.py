@@ -34,8 +34,13 @@ def get_llm_model() -> str:
     return str(_get_config("llm.model", "llama3.2:3b"))
 
 
-def get_llm_host() -> str:
-    """Get Ollama host from config."""
+def get_llm_base_url_config() -> str:
+    """Get LLM base_url from config."""
+    # Support both old 'host' key and new 'base_url' key for backwards compatibility
+    base_url = _get_config("llm.base_url", None)
+    if base_url:
+        return str(base_url)
+    # Fallback to old 'host' key
     return str(_get_config("llm.host", "http://localhost:11434"))
 
 
@@ -172,8 +177,8 @@ class LLMProvider(ABC):
 class OllamaProvider(LLMProvider):
     """Ollama LLM provider."""
     
-    def __init__(self, host: str = None, model: str = None):
-        self.host = host or get_llm_host()
+    def __init__(self, base_url: str = None, model: str = None):
+        self.base_url = (base_url or get_llm_base_url_config()).rstrip("/")
         self.model = model or get_llm_model()
     
     async def stream_generate(
@@ -197,7 +202,7 @@ class OllamaProvider(LLMProvider):
         async with httpx.AsyncClient(timeout=300.0) as client:
             async with client.stream(
                 "POST",
-                f"{self.host}/api/generate",
+                f"{self.base_url}/api/generate",
                 json={
                     "model": self.model,
                     "prompt": full_prompt,
@@ -739,7 +744,10 @@ class AnthropicProvider(LLMProvider):
 
 
 def get_llm_base_url() -> str:
-    """Get custom LLM base URL from config (for self-hosted OpenAI-compatible servers)."""
+    """Get custom LLM base URL from config (for self-hosted OpenAI-compatible servers).
+    
+    Deprecated: Use get_llm_base_url_config() instead.
+    """
     return str(_get_config("llm.base_url", ""))
 
 
@@ -754,9 +762,17 @@ def get_provider() -> LLMProvider:
     if provider == "anthropic":
         return AnthropicProvider()
     elif provider == "openrouter":
-        base_url = get_llm_base_url() or None
+        base_url = get_llm_base_url_config()
+        # Only override if not default ollama URL
+        if base_url == "http://localhost:11434":
+            base_url = OPENROUTER_BASE_URL
+        return OpenRouterProvider(base_url=base_url)
+    elif provider == "llama-server":
+        # llama-server uses OpenAI-compatible API (same as openrouter protocol)
+        base_url = get_llm_base_url_config()
         return OpenRouterProvider(base_url=base_url)
     else:
+        # Default: ollama
         return OllamaProvider()
 
 

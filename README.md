@@ -5,7 +5,7 @@ A lightweight agentic AI framework with multi-channel support. Connect via Teleg
 ## Features
 
 - **Multi-channel** - Telegram and WhatsApp support (run one or both)
-- **Multi-provider LLM** - Works with Ollama (local) or OpenRouter (cloud: Gemini, Claude, etc.)
+- **Multi-provider LLM** - Works with Ollama, llama-server, OpenRouter, or Anthropic
 - **Tool calling** - Can read/write files, search, and execute commands
 - **Multi-user sessions** - Each user gets isolated persistent memory
 - **Workspace isolation** - Only has access to configured workspace directory
@@ -105,9 +105,9 @@ ClawLite uses two config files:
 ```yaml
 # LLM settings
 llm:
-  provider: openrouter # ollama | openrouter | anthropic
+  provider: openrouter # ollama | openrouter | llama-server | anthropic
   model: google/gemini-2.0-flash-001
-  host: http://localhost:11434 # for ollama only
+  base_url: https://openrouter.ai/api/v1
   timeout: 60
 
 # Access control
@@ -186,7 +186,16 @@ On first run, scan the QR code shown in logs with WhatsApp on your phone.
 llm:
   provider: ollama
   model: llama3.2:3b
-  host: http://localhost:11434
+  base_url: http://localhost:11434
+```
+
+**llama-server (llama.cpp):**
+
+```yaml
+llm:
+  provider: llama-server
+  model: qwen3.5  # usually ignored, model is loaded by server
+  base_url: http://localhost:8080/v1
 ```
 
 **OpenRouter (cloud):**
@@ -195,6 +204,7 @@ llm:
 llm:
   provider: openrouter
   model: google/gemini-2.5-pro-preview-03-25
+  # base_url: https://openrouter.ai/api/v1 (default)
 ```
 
 **Anthropic:**
@@ -203,6 +213,7 @@ llm:
 llm:
   provider: anthropic
   model: claude-sonnet-4-20250514
+  # base_url: https://api.anthropic.com (default)
 ```
 
 See [OpenRouter Models](https://openrouter.ai/models) for available models.
@@ -495,9 +506,9 @@ After setup, users can still modify `SOUL.md` anytime by asking the bot or using
 
 | Key                             | Description                                        | Default                  |
 | ------------------------------- | -------------------------------------------------- | ------------------------ |
-| `llm.provider`                  | LLM provider (`ollama`, `openrouter`, `anthropic`) | `ollama`                 |
+| `llm.provider`                  | LLM provider (`ollama`, `openrouter`, `llama-server`, `anthropic`) | `ollama`  |
 | `llm.model`                     | Model name/ID                                      | `llama3.2:3b`            |
-| `llm.host`                      | Ollama server URL (ollama only)                    | `http://localhost:11434` |
+| `llm.base_url`                  | LLM server URL                                     | `http://localhost:11434` |
 | `llm.timeout`                   | Request timeout in seconds                         | `60`                     |
 | `channels.telegram.enabled`     | Enable Telegram channel                            | `true`                   |
 | `channels.whatsapp.enabled`     | Enable WhatsApp channel                            | `false`                  |
@@ -550,7 +561,7 @@ If Ollama runs on a different machine:
 ```yaml
 llm:
   provider: ollama
-  host: http://192.168.1.100:11434
+  base_url: http://192.168.1.100:11434
   model: llama3.2:3b
 ```
 
@@ -561,7 +572,9 @@ extra_hosts:
   - "ollama-host:192.168.1.100"
 ```
 
-Then use `host: http://ollama-host:11434` in config.yaml.
+Then use `base_url: http://ollama-host:11434` in config.yaml.
+
+
 
 ## Recommended Models
 

@@ -6,20 +6,36 @@ Respond in plain text. No markdown formatting (no bold, italics, headers, tables
 
 ## Reminders & Scheduling (Built-in)
 
-To create reminders for the user, use the `add_reminder` tool:
+ClawLite has a robust reminder system. Use these tools:
+
+### add_reminder - Create reminders
+Supports one-time (relative/absolute) and recurring:
 
 <tool_call>
-{"tool": "add_reminder", "args": {"schedule": "30 4 * * *", "message": "🕌 Waktunya Shalat Subuh", "label": "subuh"}}
+{"tool": "add_reminder", "args": {"time": "5 menit", "message": "Waktunya istirahat!", "label": "istirahat"}}
 </tool_call>
 
-Common schedules:
-- `30 4 * * *` = Daily 04:30
-- `0 9 * * 1-5` = Weekdays 09:00
-- `0 */2 * * *` = Every 2 hours
-- `*/30 * * * *` = Every 30 minutes
+**Time formats:**
+- Relative: "5 menit", "1 jam", "30 detik", "2 hari"
+- Absolute: "14:30", "2026-03-17 14:30"
+- Recurring (cron): "30 4 * * *" (daily 04:30)
 
-The reminder will be automatically sent to the current user via their channel (Telegram/WhatsApp).
-You don't need to know the user's ID or channel - it's handled automatically.
+### list_reminders - View all reminders
+<tool_call>
+{"tool": "list_reminders", "args": {}}
+</tool_call>
+
+### edit_reminder - Modify reminder
+<tool_call>
+{"tool": "edit_reminder", "args": {"id": "abc123", "time": "10 menit", "message": "New message"}}
+</tool_call>
+
+### delete_reminder - Remove reminder
+<tool_call>
+{"tool": "delete_reminder", "args": {"id": "abc123"}}
+</tool_call>
+
+Reminders are automatically sent to the user. No need to know user ID or channel.
 
 ## Tool Call Format
 

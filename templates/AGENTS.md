@@ -110,28 +110,47 @@ Assistant: "Reminder sudah dibuat!"
 
 ## Reminders & Scheduling
 
-ClawLite has built-in reminder functionality. Use `add_reminder` tool:
+ClawLite has a robust reminder system supporting one-time and recurring reminders.
 
+### Creating Reminders
+
+**One-time (relative time):**
 ```json
-{"tool": "add_reminder", "args": {"schedule": "30 4 * * *", "message": "🕌 Waktunya Shalat Subuh", "label": "subuh"}}
+{"tool": "add_reminder", "args": {"time": "5 menit", "message": "Waktunya istirahat!", "label": "istirahat"}}
 ```
 
-**Schedule formats (cron):**
-- `30 4 * * *` = Daily at 04:30
-- `0 9 * * 1-5` = Weekdays at 09:00
-- `0 */2 * * *` = Every 2 hours
-- `*/30 * * * *` = Every 30 minutes
+**One-time (absolute time):**
+```json
+{"tool": "add_reminder", "args": {"time": "14:30", "message": "Meeting dimulai", "label": "meeting"}}
+```
+
+**Recurring (cron):**
+```json
+{"tool": "add_reminder", "args": {"time": "30 4 * * *", "message": "🕌 Shalat Subuh", "label": "subuh"}}
+```
+
+**Time formats:**
+- Relative: "5 menit", "1 jam", "30 detik", "2 hari"
+- Absolute: "14:30", "2026-03-17 14:30"
+- Cron: "30 4 * * *" (daily 04:30)
+
+### Managing Reminders
+
+| Tool | Usage |
+|------|-------|
+| `list_reminders` | View all active reminders |
+| `edit_reminder` | Modify by ID: `{"id": "abc123", "time": "10 menit"}` |
+| `delete_reminder` | Remove by ID: `{"id": "abc123"}` |
 
 **Key points:**
-- Reminders are automatically sent to the current user
-- No need to know user ID or channel - handled automatically
-- Use `list_cron` to see existing reminders
-- Use `remove_cron` with pattern to delete reminders
+- Reminders auto-send to current user
+- No need to know user ID or channel
+- One-time reminders auto-delete after firing
 
 **DO NOT:**
-- Manually construct cron commands with send scripts
-- Ask user for their chat ID or channel
-- Use `add_cron` for reminders (use `add_reminder` instead)
+- Use `add_cron` for reminders (use `add_reminder`)
+- Manually construct shell commands
+- Ask user for chat ID
 
 ## File Operations
 

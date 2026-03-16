@@ -1,12 +1,42 @@
-"""Cron management tools."""
+"""Cron management tools with built-in reminder support."""
 
 import os
+import sys
 import asyncio
 import re
 import logging
+from pathlib import Path
 from .base import Tool, ToolResult, WORKSPACE
 
 logger = logging.getLogger("clawlite.tools.cron")
+
+# ClawLite installation directory (for send-message functionality)
+CLAWLITE_DIR = Path(__file__).parent.parent.parent.resolve()
+
+
+def get_send_command(user_id: str, message: str) -> str:
+    """
+    Build the command to send a message to a user.
+    
+    Uses ClawLite's internal send mechanism via Python CLI.
+    
+    Args:
+        user_id: Prefixed user ID (e.g., "tg_123456")
+        message: Message text to send
+    
+    Returns:
+        Shell command string
+    """
+    # Escape message for shell
+    escaped_msg = message.replace("'", "'\\''")
+    
+    # Use ClawLite's venv python to call send CLI
+    venv_python = CLAWLITE_DIR / ".venv" / "bin" / "python"
+    if not venv_python.exists():
+        # Fallback to system python
+        venv_python = sys.executable
+    
+    return f"cd {CLAWLITE_DIR} && {venv_python} -m src.cli.send -u '{user_id}' -m '{escaped_msg}'"
 
 
 def validate_cron_schedule(schedule: str) -> tuple[bool, str]:
@@ -227,3 +257,152 @@ class RemoveCronTool(Tool):
         except Exception as e:
             logger.exception("Error removing cron job")
             return ToolResult(False, "", f"Error removing cron job: {str(e)}")
+
+
+class AddReminderTool(Tool):
+    """
+    High-level tool to create scheduled reminders.
+    
+    Automatically constructs the send-message command and adds to cron.
+    Uses the current user's ID from context.
+    """
+    name = "add_reminder"
+    description = (
+        "Create a scheduled reminder that will be sent to the user at the specified time. "
+        "This is the preferred way to set up reminders - no need to manually construct cron commands."
+    )
+    parameters = {
+        "schedule": "string - cron schedule (e.g., '30 4 * * *' for 4:30 AM daily, '0 9 * * 1-5' for 9 AM weekdays)",
+        "message": "string - reminder message to send",
+        "label": "string - optional label/name for this reminder (makes it easier to remove later)"
+    }
+    
+    async def execute(
+        self, 
+        schedule: str = "", 
+        message: str = "",
+        label: str = "",
+        **kwargs
+    ) -> ToolResult:
+        try:
+            if not schedule or not message:
+                return ToolResult(False, "", "Both schedule and message are required")
+            
+            # Get user_id from tool context (set by agent)
+            user_id = getattr(self, 'user_id', None)
+            if not user_id:
+                return ToolResult(
+                    False, "", 
+                    "User ID not available. Cannot create reminder without knowing who to send it to."
+                )
+            
+            # Validate schedule
+            valid, error = validate_cron_schedule(schedule)
+            if not valid:
+                return ToolResult(False, "", error)
+            
+            # Build the send command
+            send_cmd = get_send_command(user_id, message)
+            
+            # Create comment/label
+            if label:
+                comment = f"REMINDER: {label} (user: {user_id})"
+            else:
+                # Auto-generate label from message (first 30 chars)
+                short_msg = message[:30] + "..." if len(message) > 30 else message
+                comment = f"REMINDER: {short_msg} (user: {user_id})"
+            
+            # Get current crontab
+            proc = await asyncio.create_subprocess_exec(
+                "crontab", "-l",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=10)
+            
+            current = stdout.decode("utf-8", errors="replace")
+            if "no crontab" in stderr.decode().lower():
+                current = ""
+            
+            # Ensure PATH is set
+            path_line = "PATH=/usr/local/bin:/usr/bin:/bin"
+            if path_line not in current:
+                current = path_line + "\n" + current if current else path_line + "\n"
+            
+            # Build and append entry
+            new_entry = f"# {comment}\n{schedule} {send_cmd}"
+            
+            if current and not current.endswith("\n"):
+                current += "\n"
+            new_crontab = current + new_entry + "\n"
+            
+            # Install new crontab
+            proc = await asyncio.create_subprocess_exec(
+                "crontab", "-",
+                stdin=asyncio.subprocess.PIPE,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, stderr = await asyncio.wait_for(
+                proc.communicate(input=new_crontab.encode()),
+                timeout=10
+            )
+            
+            if proc.returncode != 0:
+                errors = stderr.decode("utf-8", errors="replace")
+                logger.warning(f"Failed to add reminder: {errors[:200]}")
+                return ToolResult(False, "", f"Failed to add reminder: {errors[:500]}")
+            
+            # Success message
+            logger.info(f"Added reminder for {user_id}: {schedule} - {message[:50]}...")
+            
+            # Parse schedule for human-readable output
+            schedule_desc = _describe_schedule(schedule)
+            
+            return ToolResult(
+                True, 
+                f"✅ Reminder created!\n"
+                f"Schedule: {schedule} ({schedule_desc})\n"
+                f"Message: {message}\n"
+                f"Label: {label or '(auto)'}"
+            )
+            
+        except asyncio.TimeoutError:
+            logger.error("crontab command timed out")
+            return ToolResult(False, "", "Timed out creating reminder")
+        except Exception as e:
+            logger.exception("Error creating reminder")
+            return ToolResult(False, "", f"Error creating reminder: {str(e)}")
+
+
+def _describe_schedule(schedule: str) -> str:
+    """Convert cron schedule to human-readable description."""
+    parts = schedule.split()
+    if len(parts) != 5:
+        return schedule
+    
+    minute, hour, dom, month, dow = parts
+    
+    # Common patterns
+    if dom == "*" and month == "*":
+        if dow == "*":
+            if minute == "0" and hour != "*":
+                return f"Daily at {hour}:00"
+            elif minute != "*" and hour != "*":
+                return f"Daily at {hour}:{minute.zfill(2)}"
+        elif dow == "1-5":
+            if minute != "*" and hour != "*":
+                return f"Weekdays at {hour}:{minute.zfill(2)}"
+        elif dow == "0,6":
+            if minute != "*" and hour != "*":
+                return f"Weekends at {hour}:{minute.zfill(2)}"
+    
+    if minute.startswith("*/"):
+        interval = minute[2:]
+        return f"Every {interval} minutes"
+    
+    if hour.startswith("*/"):
+        interval = hour[2:]
+        return f"Every {interval} hours"
+    
+    return schedule

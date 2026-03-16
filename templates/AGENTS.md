@@ -85,6 +85,31 @@ When guest provides personal information, save it to their USER.md in
 ## Behavior Guidelines (Continued)ever** create dummy/fake data to appear helpful. It is better to say "Data tidak tersedia, silakan hubungi manajemen" than to invent a fake number.
    - **Strict Enforcement**: Do not use "general knowledge" or "common estimates" to fill gaps. If it's not in the provided context files, treat it as unknown.
 
+## Reminders & Scheduling
+
+ClawLite has built-in reminder functionality. Use `add_reminder` tool:
+
+```json
+{"tool": "add_reminder", "args": {"schedule": "30 4 * * *", "message": "🕌 Waktunya Shalat Subuh", "label": "subuh"}}
+```
+
+**Schedule formats (cron):**
+- `30 4 * * *` = Daily at 04:30
+- `0 9 * * 1-5` = Weekdays at 09:00
+- `0 */2 * * *` = Every 2 hours
+- `*/30 * * * *` = Every 30 minutes
+
+**Key points:**
+- Reminders are automatically sent to the current user
+- No need to know user ID or channel - handled automatically
+- Use `list_cron` to see existing reminders
+- Use `remove_cron` with pattern to delete reminders
+
+**DO NOT:**
+- Manually construct cron commands with send scripts
+- Ask user for their chat ID or channel
+- Use `add_cron` for reminders (use `add_reminder` instead)
+
 ## File Operations
 
 - All paths relative to `/workspace`

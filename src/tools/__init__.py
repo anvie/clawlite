@@ -7,7 +7,7 @@ from .base import Tool, ToolResult
 from .file_ops import ReadFileTool, WriteFileTool, EditFileTool, ListDirTool, SendFileTool
 from .shell import ExecTool, RunBashTool
 from .search import GrepTool, FindFilesTool
-from .cron import ListCronTool, AddCronTool, RemoveCronTool
+from .cron import ListCronTool, AddCronTool, RemoveCronTool, AddReminderTool
 from .memory import MemoryLogTool, MemoryReadTool, MemoryUpdateTool, UserUpdateTool
 from .web import WebSearchTool, WebFetchTool
 from .skill_tools import load_skill_tools
@@ -70,6 +70,7 @@ _ALL_TOOLS = {
     "list_cron": ListCronTool(),
     "add_cron": AddCronTool(),
     "remove_cron": RemoveCronTool(),
+    "add_reminder": AddReminderTool(),
     "web_search": WebSearchTool(),
     "web_fetch": WebFetchTool(),
 }

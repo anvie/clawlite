@@ -26,7 +26,7 @@ if [ "$(id -u)" = "0" ]; then
     chmod 600 /var/spool/cron/crontabs/clawlite
     
     # Setup reminder daemon cron job (runs every minute)
-    REMINDER_CRON="* * * * * cd /app && /app/.venv/bin/python /app/scripts/reminder-daemon.py >> /tmp/reminder-daemon.log 2>&1"
+    REMINDER_CRON="* * * * * cd /app && /usr/local/bin/python /app/scripts/reminder-daemon.py >> /tmp/reminder-daemon.log 2>&1"
     (crontab -u clawlite -l 2>/dev/null | grep -v "reminder-daemon"; echo "$REMINDER_CRON") | crontab -u clawlite -
     echo "✓ Reminder daemon cron installed"
     

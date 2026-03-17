@@ -72,13 +72,16 @@ def send_message(user_id: str, message: str) -> bool:
     import subprocess
     
     try:
-        # Use ClawLite's send CLI
+        # Use system python (works in both Docker and local dev)
         venv_python = CLAWLITE_DIR / ".venv" / "bin" / "python"
-        if not venv_python.exists():
-            venv_python = sys.executable
+        if venv_python.exists():
+            python_path = str(venv_python)
+        else:
+            # Docker or system install - use sys.executable
+            python_path = sys.executable
         
         result = subprocess.run(
-            [str(venv_python), "-m", "src.cli.send", "-u", user_id, "-m", message],
+            [python_path, "-m", "src.cli.send", "-u", user_id, "-m", message],
             cwd=str(CLAWLITE_DIR),
             capture_output=True,
             text=True,

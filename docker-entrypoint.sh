@@ -26,7 +26,14 @@ if [ "$(id -u)" = "0" ]; then
     chmod 600 /var/spool/cron/crontabs/clawlite
     
     # Setup reminder daemon cron job (runs every minute)
-    REMINDER_CRON="* * * * * cd /app && /usr/local/bin/python /app/scripts/reminder-daemon.py >> /tmp/reminder-daemon.log 2>&1"
+    # Export required env vars to cron (cron doesn't inherit container env)
+    ENV_VARS=""
+    [ -n "$TELEGRAM_TOKEN" ] && ENV_VARS="$ENV_VARS TELEGRAM_TOKEN=$TELEGRAM_TOKEN"
+    [ -n "$WHATSAPP_PHONE" ] && ENV_VARS="$ENV_VARS WHATSAPP_PHONE=$WHATSAPP_PHONE"
+    [ -n "$WORKSPACE_DIR" ] && ENV_VARS="$ENV_VARS WORKSPACE_DIR=$WORKSPACE_DIR"
+    ENV_VARS="$ENV_VARS WORKSPACE_DIR=/workspace"
+    
+    REMINDER_CRON="* * * * * cd /app &&$ENV_VARS /usr/local/bin/python /app/scripts/reminder-daemon.py >> /tmp/reminder-daemon.log 2>&1"
     (crontab -u clawlite -l 2>/dev/null | grep -v "reminder-daemon"; echo "$REMINDER_CRON") | crontab -u clawlite -
     echo "✓ Reminder daemon cron installed"
     

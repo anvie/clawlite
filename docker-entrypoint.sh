@@ -28,13 +28,17 @@ if [ "$(id -u)" = "0" ]; then
     # Setup reminder daemon cron job (runs every minute)
     # Export required env vars to cron (cron doesn't inherit container env)
     ENV_VARS=""
-    [ -n "$TELEGRAM_TOKEN" ] && ENV_VARS="$ENV_VARS TELEGRAM_TOKEN=$TELEGRAM_TOKEN"
-    [ -n "$WHATSAPP_PHONE" ] && ENV_VARS="$ENV_VARS WHATSAPP_PHONE=$WHATSAPP_PHONE"
-    [ -n "$WORKSPACE_DIR" ] && ENV_VARS="$ENV_VARS WORKSPACE_DIR=$WORKSPACE_DIR"
-    ENV_VARS="$ENV_VARS WORKSPACE_DIR=/workspace"
+    [ -n "$TELEGRAM_TOKEN" ] && ENV_VARS="${ENV_VARS}TELEGRAM_TOKEN=$TELEGRAM_TOKEN "
+    [ -n "$WHATSAPP_PHONE" ] && ENV_VARS="${ENV_VARS}WHATSAPP_PHONE=$WHATSAPP_PHONE "
+    ENV_VARS="${ENV_VARS}WORKSPACE_DIR=/workspace"
     
-    REMINDER_CRON="* * * * * cd /app &&$ENV_VARS /usr/local/bin/python /app/scripts/reminder-daemon.py >> /tmp/reminder-daemon.log 2>&1"
-    (crontab -u clawlite -l 2>/dev/null | grep -v "reminder-daemon"; echo "$REMINDER_CRON") | crontab -u clawlite -
+    # Build cron entry
+    REMINDER_CRON="* * * * * cd /app && $ENV_VARS /usr/local/bin/python /app/scripts/reminder-daemon.py >> /tmp/reminder-daemon.log 2>&1"
+    
+    # Install cron (remove old entry first if exists, then add new)
+    EXISTING=$(crontab -u clawlite -l 2>/dev/null | grep -v "reminder-daemon" || true)
+    echo "${EXISTING}
+${REMINDER_CRON}" | crontab -u clawlite -
     echo "✓ Reminder daemon cron installed"
     
     service cron start || cron

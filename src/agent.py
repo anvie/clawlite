@@ -27,6 +27,11 @@ from .errors import sanitize_error, format_user_error
 logger = logging.getLogger("clawlite.agent")
 
 
+def get_history_limit() -> int:
+    """Get max history messages from config (default: 10)."""
+    return int(config_get("agent.history_limit", 10))
+
+
 def strip_thinking_tags(text: str) -> str:
     """Strip thinking/reasoning tags and leaked tool calls from response.
     
@@ -300,9 +305,10 @@ async def _run_agent_native_tools(
     anthropic_tools = convert_tools_to_anthropic_format(available_tools)
     logger.debug(f"Converted {len(anthropic_tools)} tools to Anthropic format")
     
-    # Build initial messages from history
+    # Build initial messages from history (limit to prevent context overflow)
     messages: List[Dict[str, Any]] = []
-    for msg in history[-10:]:
+    history_limit = get_history_limit()
+    for msg in history[-history_limit:]:
         messages.append({
             "role": msg["role"],
             "content": msg["content"],
@@ -699,9 +705,10 @@ async def run_agent(
         except Exception as e:
             logger.warning(f"Translation failed, using original message: {e}")
     
-    # Build conversation
+    # Build conversation (limit to prevent context overflow)
+    history_limit = get_history_limit()
     conversation = ""
-    for msg in history[-10:]:
+    for msg in history[-history_limit:]:
         role = msg["role"]
         content = msg["content"]
         conversation += f"{role}\n{content}\n\n"

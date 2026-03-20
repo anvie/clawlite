@@ -283,6 +283,11 @@ class OpenRouterProvider(LLMProvider):
         if system:
             messages.append({"role": "system", "content": system})
         
+        # For Qwen3.5 models on vLLM, disable thinking mode to get direct responses
+        is_qwen35 = "qwen3.5" in self.model.lower() or "qwen3_5" in self.model.lower()
+        if is_qwen35 and is_self_hosted:
+            prompt = prompt + " /no_think"
+        
         # Build user message content (multimodal if images provided)
         if images:
             content = []
@@ -388,6 +393,11 @@ class OpenRouterProvider(LLMProvider):
                         
                         # Check for thinking tags (Ollama / inline style fallback)
                         if "<think>" in full_response and not in_thinking and not thinking_done:
+                            in_thinking = True
+                            thinking_buffer = ""
+                        
+                        # Check for Qwen3.5 "Thinking Process:" prefix (vLLM without reasoning parser)
+                        if full_response.startswith("Thinking Process:") and not in_thinking and not thinking_done:
                             in_thinking = True
                             thinking_buffer = ""
                         
@@ -767,8 +777,8 @@ def get_provider() -> LLMProvider:
         if base_url == "http://localhost:11434":
             base_url = OPENROUTER_BASE_URL
         return OpenRouterProvider(base_url=base_url)
-    elif provider == "llama-server":
-        # llama-server uses OpenAI-compatible API (same as openrouter protocol)
+    elif provider in ("llama-server", "vllm", "openai"):
+        # OpenAI-compatible API (llama.cpp, vLLM, etc.)
         base_url = get_llm_base_url_config()
         return OpenRouterProvider(base_url=base_url)
     else:

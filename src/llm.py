@@ -283,10 +283,8 @@ class OpenRouterProvider(LLMProvider):
         if system:
             messages.append({"role": "system", "content": system})
         
-        # For Qwen3.5 models on vLLM, disable thinking mode to get direct responses
-        is_qwen35 = "qwen3.5" in self.model.lower() or "qwen3_5" in self.model.lower()
-        if is_qwen35 and is_self_hosted:
-            prompt = prompt + " /no_think"
+        # Note: Thinking mode is controlled via chat_template_kwargs (see below)
+        # The /no_think suffix doesn't work reliably with vLLM
         
         # Build user message content (multimodal if images provided)
         if images:

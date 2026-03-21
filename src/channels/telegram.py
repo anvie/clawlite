@@ -53,6 +53,7 @@ class TelegramChannel(BaseChannel):
         self.application.add_handler(CommandHandler("stop", self._cmd_stop))
         self.application.add_handler(CommandHandler("new", self._cmd_new))
         self.application.add_handler(CommandHandler("clear", self._cmd_clear))
+        self.application.add_handler(CommandHandler("status", self._cmd_status))
         self.application.add_handler(CommandHandler("tools", self._cmd_tools))
         self.application.add_handler(CommandHandler("workspace", self._cmd_workspace))
         self.application.add_handler(CommandHandler("dump", self._cmd_dump))
@@ -124,6 +125,7 @@ class TelegramChannel(BaseChannel):
             f"/stop - Stop current generation\n"
             f"/new - Session baru (keep memory)\n"
             f"/clear - Hapus history\n"
+            f"/status - Model & usage info\n"
             f"/tools - List available tools\n"
             f"/workspace - Lihat isi workspace",
             parse_mode="Markdown"
@@ -184,6 +186,50 @@ class TelegramChannel(BaseChannel):
         
         self.logger.info(f"🆕 New session started for {user_id}")
         await update.message.reply_text("🆕 Session baru dimulai.\nMemory & preferences tetap ada.")
+    
+    async def _cmd_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handle /status command - show model and usage info."""
+        user_id = self.format_user_id(update.effective_user.id)
+        if not self.is_allowed(user_id):
+            return
+        
+        try:
+            from ..config import get as config_get
+            from ..agent import get_history_limit
+            
+            # Get config values
+            provider = config_get("llm.provider", "unknown")
+            model = config_get("llm.model", "unknown")
+            base_url = config_get("llm.base_url", "")
+            history_limit = get_history_limit()
+            
+            # Get current conversation stats
+            history = self.conversations.get(user_id, [])
+            msg_count = len(history)
+            
+            # Estimate tokens (rough: chars / 4)
+            total_chars = sum(len(m.get("content", "")) for m in history)
+            estimated_tokens = total_chars // 4
+            
+            # Format status message
+            status = (
+                f"📊 *ClawLite Status*\n\n"
+                f"*Model:* `{model}`\n"
+                f"*Provider:* {provider}\n"
+            )
+            if base_url:
+                status += f"*Base URL:* `{base_url}`\n"
+            status += (
+                f"\n*Session:*\n"
+                f"• Messages: {msg_count}/{history_limit}\n"
+                f"• Est. tokens: ~{estimated_tokens:,}\n"
+            )
+            
+            await update.message.reply_text(status, parse_mode="Markdown")
+            
+        except Exception as e:
+            self.logger.error(f"Failed to get status: {e}")
+            await update.message.reply_text(f"❌ Error: {str(e)[:200]}")
     
     async def _cmd_tools(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle /tools command."""

@@ -159,6 +159,10 @@ class BaseChannel(ABC):
         if text.strip() == "/clear":
             return await self._handle_clear(user_id)
         
+        # Handle /status command
+        if text.strip() == "/status":
+            return await self._handle_status(user_id)
+        
         # Handle /dump command (owner/admin only)
         if text.strip() == "/dump":
             return await self._handle_dump(user_id)
@@ -271,6 +275,44 @@ class BaseChannel(ABC):
             
         except Exception as e:
             self.logger.error(f"Failed to start new session for {user_id}: {e}")
+            return f"❌ Failed: {str(e)[:200]}"
+    
+    async def _handle_status(self, user_id: str) -> str:
+        """
+        Handle /status command to show model and usage info.
+        
+        Args:
+            user_id: Prefixed user ID
+        
+        Returns:
+            Status message
+        """
+        try:
+            from ..config import get as config_get
+            from ..agent import get_history_limit
+            
+            # Get config values
+            provider = config_get("llm.provider", "unknown")
+            model = config_get("llm.model", "unknown")
+            base_url = config_get("llm.base_url", "")
+            history_limit = get_history_limit()
+            
+            # Note: base channel doesn't have conversations dict
+            # Subclasses should override this for accurate counts
+            
+            status = (
+                f"📊 ClawLite Status\n\n"
+                f"Model: {model}\n"
+                f"Provider: {provider}\n"
+            )
+            if base_url:
+                status += f"Base URL: {base_url}\n"
+            status += f"History limit: {history_limit} messages\n"
+            
+            return status
+            
+        except Exception as e:
+            self.logger.error(f"Failed to get status: {e}")
             return f"❌ Failed: {str(e)[:200]}"
     
     async def _handle_dump(self, user_id: str) -> str:

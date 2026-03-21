@@ -465,3 +465,69 @@ class SendFileTool(Tool):
             return ToolResult(False, "", str(e))
         except Exception as e:
             return ToolResult(False, "", f"Error sending file: {e}")
+
+
+class AnalyzeImageTool(Tool):
+    """Analyze an image file using the vision model."""
+    
+    name = "analyze_image"
+    description = """Analyze an image file and describe its contents.
+Use this to understand what's in a photo or image stored in the workspace.
+Supports: jpg, jpeg, png, gif, webp"""
+    
+    parameters = {
+        "path": "string - path to image file",
+        "prompt": "string - (optional) specific question about the image, default: 'Describe this image in detail'",
+    }
+    
+    async def execute(self, path: str = "", prompt: str = "", **kwargs) -> ToolResult:
+        try:
+            full_path = self.validate_path(path)
+            
+            if not os.path.exists(full_path):
+                return ToolResult(False, "", f"Image not found: {path}")
+            
+            if not os.path.isfile(full_path):
+                return ToolResult(False, "", f"Not a file: {path}")
+            
+            # Check file extension
+            _, ext = os.path.splitext(full_path.lower())
+            supported_exts = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
+            if ext not in supported_exts:
+                return ToolResult(False, "", f"Unsupported image format: {ext}. Supported: {', '.join(supported_exts)}")
+            
+            # Size limit (5MB for images)
+            file_size = os.path.getsize(full_path)
+            if file_size > 5_000_000:
+                return ToolResult(False, "", f"Image too large (>5MB): {path}")
+            
+            # Read and base64-encode
+            with open(full_path, "rb") as f:
+                image_data = f.read()
+            
+            image_b64 = base64.b64encode(image_data).decode("ascii")
+            
+            # Build prompt
+            analysis_prompt = prompt if prompt else "Describe this image in detail. What do you see?"
+            
+            # Call LLM with image
+            try:
+                from ..llm import generate
+                
+                response, _ = await generate(
+                    prompt=analysis_prompt,
+                    images=[image_b64],
+                )
+                
+                if response:
+                    return ToolResult(True, response.strip())
+                else:
+                    return ToolResult(False, "", "No response from vision model")
+                    
+            except Exception as e:
+                return ToolResult(False, "", f"Vision model error: {e}")
+            
+        except ValueError as e:
+            return ToolResult(False, "", str(e))
+        except Exception as e:
+            return ToolResult(False, "", f"Error analyzing image: {e}")

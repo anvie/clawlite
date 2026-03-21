@@ -97,6 +97,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         f"Commands:\n"
         f"/new - Session baru (keep memory)\n"
         f"/clear - Hapus history\n"
+        f"/status - Model & usage info\n"
         f"/tools - List available tools\n"
         f"/workspace - Lihat isi workspace",
         parse_mode="Markdown"
@@ -127,6 +128,46 @@ async def new_session(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     
     logger.info(f"🆕 New session started for {user_id}")
     await update.message.reply_text("🆕 Session baru dimulai.\nMemory & preferences tetap ada.")
+
+
+async def status_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Show model and usage info."""
+    user_id = update.effective_user.id
+    if not is_allowed(user_id):
+        return
+    
+    try:
+        from .config import get as config_get
+        from .agent import get_history_limit
+        
+        provider = config_get("llm.provider", "unknown")
+        model = config_get("llm.model", "unknown")
+        base_url = config_get("llm.base_url", "")
+        history_limit = get_history_limit()
+        
+        history = conversations.get(user_id, [])
+        msg_count = len(history)
+        total_chars = sum(len(m.get("content", "")) for m in history)
+        estimated_tokens = total_chars // 4
+        
+        status = (
+            f"📊 *ClawLite Status*\n\n"
+            f"*Model:* `{model}`\n"
+            f"*Provider:* {provider}\n"
+        )
+        if base_url:
+            status += f"*Base URL:* `{base_url}`\n"
+        status += (
+            f"\n*Session:*\n"
+            f"• Messages: {msg_count}/{history_limit}\n"
+            f"• Est. tokens: ~{estimated_tokens:,}\n"
+        )
+        
+        await update.message.reply_text(status, parse_mode="Markdown")
+        
+    except Exception as e:
+        logger.error(f"Failed to get status: {e}")
+        await update.message.reply_text(f"❌ Error: {str(e)[:200]}")
 
 
 async def tools_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -343,6 +384,7 @@ def main() -> None:
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("new", new_session))
     application.add_handler(CommandHandler("clear", clear))
+    application.add_handler(CommandHandler("status", status_cmd))
     application.add_handler(CommandHandler("tools", tools_cmd))
     application.add_handler(CommandHandler("workspace", workspace_cmd))
     application.add_handler(MessageHandler(filters.PHOTO, handle_photo))

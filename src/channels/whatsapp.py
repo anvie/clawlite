@@ -349,6 +349,11 @@ class WhatsAppChannel(BaseChannel):
                 await self._handle_clear(user_id, raw_user_id)
                 return
             
+            # Handle /status command
+            if text.strip() == "/status":
+                await self._handle_status(user_id, raw_user_id)
+                return
+            
             # Get conversation history
             if user_id not in self.conversations:
                 self.conversations[user_id] = []
@@ -483,6 +488,46 @@ class WhatsAppChannel(BaseChannel):
         
         self.logger.info(f"🆕 New session started for {user_id}")
         await self.send_message(raw_user_id, "🆕 Session baru dimulai.\nMemory & preferences tetap ada.")
+    
+    async def _handle_status(self, user_id: str, raw_user_id: str) -> None:
+        """Handle /status command - show model and usage info."""
+        try:
+            from ..config import get as config_get
+            from ..agent import get_history_limit
+            
+            # Get config values
+            provider = config_get("llm.provider", "unknown")
+            model = config_get("llm.model", "unknown")
+            base_url = config_get("llm.base_url", "")
+            history_limit = get_history_limit()
+            
+            # Get current conversation stats
+            history = self.conversations.get(user_id, [])
+            msg_count = len(history)
+            
+            # Estimate tokens (rough: chars / 4)
+            total_chars = sum(len(m.get("content", "")) for m in history)
+            estimated_tokens = total_chars // 4
+            
+            # Format status message (WhatsApp formatting)
+            status = (
+                f"📊 *ClawLite Status*\n\n"
+                f"*Model:* {model}\n"
+                f"*Provider:* {provider}\n"
+            )
+            if base_url:
+                status += f"*Base URL:* {base_url}\n"
+            status += (
+                f"\n*Session:*\n"
+                f"• Messages: {msg_count}/{history_limit}\n"
+                f"• Est. tokens: ~{estimated_tokens:,}\n"
+            )
+            
+            await self.send_message(raw_user_id, status)
+            
+        except Exception as e:
+            self.logger.error(f"Failed to get status: {e}")
+            await self.send_message(raw_user_id, f"❌ Error: {str(e)[:200]}")
     
     async def _send_long_message(self, user_id: str, text: str, max_len: int = 4000) -> None:
         """Send long text in chunks."""

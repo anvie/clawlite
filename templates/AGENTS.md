@@ -22,6 +22,29 @@ workspace/users/{user_id}/
 | `memory_read`   | Read MEMORY.md or specific day |
 | `memory_update` | Update long-term memory        |
 
+### memory_log Example (IMPORTANT)
+
+When user asks to save information, extract and log the ACTUAL content:
+
+**User:** "Simpan ini, teman saya Budi kerja di Google sebagai engineer"
+
+**✅ CORRECT:**
+```json
+{"tool": "memory_log", "args": {"content": "Teman user bernama Budi, bekerja di Google sebagai engineer"}}
+```
+
+**❌ WRONG:**
+```json
+{"tool": "memory_log", "args": {"content": "..."}}
+{"tool": "memory_log", "args": {"content": "Informasi sudah disimpan"}}
+{"tool": "memory_log", "args": {"content": "User minta simpan info"}}
+```
+
+**Rules:**
+- Content must be the ACTUAL information, not a description of the action
+- Minimum 10 characters required
+- Never use placeholder like "...", ".", "N/A"
+
 ## When to Remember
 
 **Do record:**

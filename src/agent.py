@@ -724,6 +724,7 @@ async def run_agent(
     thinking_shown = False
     last_tool_result = None  # Track last tool result for fallback
     pending_file_data = None  # Track file data from skills
+    pending_images = []  # Track images from tool results (analyze_image)
     json_parse_failures = 0  # Track consecutive JSON parse failures
     MAX_JSON_FAILURES = 3  # Stop after this many consecutive failures
     all_tool_interactions = []  # Collect all tool calls + results for conversation log
@@ -749,10 +750,15 @@ async def run_agent(
         last_update = 0
         
         try:
-            # Only pass images on first iteration
-            current_images = images if iterations == 1 else None
+            # Pass images: user images on first iteration + any pending images from tools
+            current_images = []
+            if iterations == 1 and images:
+                current_images.extend(images)
+            if pending_images:
+                current_images.extend(pending_images)
+                pending_images = []  # Clear after use
             
-            async for token, is_thinking, thinking_content in stream_with_retry(full_prompt, images=current_images):
+            async for token, is_thinking, thinking_content in stream_with_retry(full_prompt, images=current_images if current_images else None):
                 current_response += token
                 
                 if thinking_content:
@@ -870,11 +876,18 @@ async def run_agent(
                 result = await execute_tool_with_timeout(tool, tool_args)
                 tool_duration_ms = int((time.time() - tool_start) * 1000)
                 
-                # Check for file data (from skills)
+                # Check for file data (from skills) or image data (from analyze_image)
                 if result.file_data:
-                    pending_file_data = result.file_data
-                    result_text = f"File ready: {result.file_data.get('filename', 'file')}"
-                    logger.info(f"Tool {tool_name} returned file: {result.file_data.get('filename')}")
+                    if result.file_data.get("__image__"):
+                        # Image to be included in next LLM call
+                        pending_images.append(result.file_data.get("data"))
+                        result_text = result.output or f"Image loaded: {result.file_data.get('filename', 'image')}"
+                        logger.info(f"Tool {tool_name} returned image for analysis: {result.file_data.get('filename')}")
+                    else:
+                        # Regular file to be sent to user
+                        pending_file_data = result.file_data
+                        result_text = f"File ready: {result.file_data.get('filename', 'file')}"
+                        logger.info(f"Tool {tool_name} returned file: {result.file_data.get('filename')}")
                 elif result.success:
                     result_text = truncate_tool_output(result.output, tool_name)
                     logger.info(f"Tool {tool_name} succeeded, output length: {len(result.output)}, truncated to: {len(result_text)}")

@@ -468,19 +468,74 @@ class SendFileTool(Tool):
 
 
 class AnalyzeImageTool(Tool):
-    """Analyze an image file using the vision model."""
+    """Load an image file for the agent to see and analyze."""
     
     name = "analyze_image"
-    description = """Analyze an image file and describe its contents.
-Use this to understand what's in a photo or image stored in the workspace.
-Supports: jpg, jpeg, png, gif, webp"""
+    description = """Load an image file so you can see and analyze it.
+The image will be visible to you in your next response - describe what you see.
+Supports: jpg, jpeg, png, gif, webp (max 5MB)"""
     
     parameters = {
         "path": "string - path to image file",
-        "prompt": "string - (optional) specific question about the image, default: 'Describe this image in detail'",
     }
     
-    async def execute(self, path: str = "", prompt: str = "", **kwargs) -> ToolResult:
+    # Optimization settings
+    MAX_DIMENSION = 1536  # Max width/height (good balance for vision models)
+    JPEG_QUALITY = 85  # Compression quality
+    
+    def _optimize_image(self, image_data: bytes) -> tuple[bytes, dict]:
+        """Resize and compress image for optimal LLM processing.
+        
+        Returns:
+            (optimized_bytes, info_dict)
+        """
+        try:
+            from PIL import Image
+            import io
+            
+            # Load image
+            img = Image.open(io.BytesIO(image_data))
+            original_size = img.size
+            original_mode = img.mode
+            
+            # Convert RGBA to RGB (for JPEG output)
+            if img.mode in ('RGBA', 'P'):
+                # Create white background
+                background = Image.new('RGB', img.size, (255, 255, 255))
+                if img.mode == 'P':
+                    img = img.convert('RGBA')
+                background.paste(img, mask=img.split()[-1] if img.mode == 'RGBA' else None)
+                img = background
+            elif img.mode != 'RGB':
+                img = img.convert('RGB')
+            
+            # Resize if needed
+            width, height = img.size
+            if width > self.MAX_DIMENSION or height > self.MAX_DIMENSION:
+                ratio = min(self.MAX_DIMENSION / width, self.MAX_DIMENSION / height)
+                new_size = (int(width * ratio), int(height * ratio))
+                img = img.resize(new_size, Image.Resampling.LANCZOS)
+            
+            # Compress to JPEG
+            output = io.BytesIO()
+            img.save(output, format='JPEG', quality=self.JPEG_QUALITY, optimize=True)
+            optimized_data = output.getvalue()
+            
+            info = {
+                "original_size": original_size,
+                "optimized_size": img.size,
+                "original_bytes": len(image_data),
+                "optimized_bytes": len(optimized_data),
+                "compression_ratio": len(image_data) / len(optimized_data) if len(optimized_data) > 0 else 1,
+            }
+            
+            return optimized_data, info
+            
+        except Exception as e:
+            # Fallback: return original if optimization fails
+            return image_data, {"error": str(e)}
+    
+    async def execute(self, path: str = "", **kwargs) -> ToolResult:
         try:
             full_path = self.validate_path(path)
             
@@ -501,33 +556,35 @@ Supports: jpg, jpeg, png, gif, webp"""
             if file_size > 5_000_000:
                 return ToolResult(False, "", f"Image too large (>5MB): {path}")
             
-            # Read and base64-encode
+            # Read image
             with open(full_path, "rb") as f:
                 image_data = f.read()
             
-            image_b64 = base64.b64encode(image_data).decode("ascii")
+            # Optimize image for LLM processing
+            optimized_data, opt_info = self._optimize_image(image_data)
+            image_b64 = base64.b64encode(optimized_data).decode("ascii")
+            filename = os.path.basename(full_path)
             
-            # Build prompt
-            analysis_prompt = prompt if prompt else "Describe this image in detail. What do you see?"
+            # Build output message
+            if "error" in opt_info:
+                output_msg = f"[Image loaded: {filename} ({file_size:,} bytes)]"
+            else:
+                orig_kb = opt_info['original_bytes'] / 1024
+                opt_kb = opt_info['optimized_bytes'] / 1024
+                output_msg = f"[Image loaded: {filename} ({opt_info['optimized_size'][0]}x{opt_info['optimized_size'][1]}, {opt_kb:.0f}KB)]"
             
-            # Call LLM with image
-            try:
-                from ..llm import generate
-                
-                response, _ = await generate(
-                    prompt=analysis_prompt,
-                    images=[image_b64],
-                )
-                
-                if response:
-                    return ToolResult(True, response.strip())
-                else:
-                    return ToolResult(False, "", "No response from vision model")
-                    
-            except Exception as e:
-                return ToolResult(False, "", f"Vision model error: {e}")
+            # Return image data for agent to see in next turn
+            return ToolResult(
+                success=True,
+                output=output_msg,
+                file_data={
+                    "__image__": True,
+                    "data": image_b64,
+                    "filename": filename,
+                },
+            )
             
         except ValueError as e:
             return ToolResult(False, "", str(e))
         except Exception as e:
-            return ToolResult(False, "", f"Error analyzing image: {e}")
+            return ToolResult(False, "", f"Error loading image: {e}")

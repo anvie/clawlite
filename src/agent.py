@@ -212,10 +212,28 @@ Wait for the tool result before continuing. You can chain multiple tool calls.
 
 ## Rules
 1. All file paths are relative to /workspace
-2. You cannot access files outside /workspace
+2. User-specific files are in users/{{user_id}}/ (memory, USER.md, etc.)
 3. Only allowed shell commands can be executed
-4. Think through problems step by step
-5. After completing a task, summarize what you did
+4. After completing a task, briefly summarize what you did
+
+## Reasoning
+Before answering questions involving logic or real-world scenarios:
+1. Think through the scenario step-by-step
+2. Consider what's physically/logically required
+3. Verify your answer makes practical sense
+
+## Response Style
+- Keep responses brief and to the point
+- Simple questions: 1-2 sentences
+- Complex questions: structured but not verbose
+- Avoid unnecessary filler phrases like "Ada yang bisa saya bantu lagi?"
+
+## Batch Operations
+When processing multiple items (files, images, etc.):
+1. Track all items to process
+2. Process each one completely
+3. Verify all items done before final response
+4. Explicitly mention any failures
 
 Be helpful, concise, and careful with file operations.
 """
@@ -728,6 +746,7 @@ async def run_agent(
     json_parse_failures = 0  # Track consecutive JSON parse failures
     MAX_JSON_FAILURES = 3  # Stop after this many consecutive failures
     all_tool_interactions = []  # Collect all tool calls + results for conversation log
+    executed_tool_calls = set()  # Track executed calls to prevent duplicates
     
     while iterations < max_iterations:
         iterations += 1
@@ -853,6 +872,18 @@ async def run_agent(
                 continue
             
             logger.info(f"Executing tool: {tool_name} with args: {list(tool_args.keys())}")
+            
+            # Check for duplicate tool call (same tool + same args)
+            try:
+                call_key = f"{tool_name}:{json.dumps(tool_args, sort_keys=True)}"
+            except:
+                call_key = f"{tool_name}:{str(tool_args)}"
+            
+            if call_key in executed_tool_calls:
+                logger.info(f"Skipping duplicate tool call: {tool_name}")
+                full_prompt += f"{response_part}\n\n<tool_result>\n(Skipped: duplicate call - already executed)\n</tool_result>\n\nassistant\n"
+                continue
+            executed_tool_calls.add(call_key)
             
             # Reset failure counter on successful parse
             json_parse_failures = 0

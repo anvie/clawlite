@@ -23,7 +23,8 @@ class MemoryLogTool(Tool):
     """Append to today's daily memory log."""
     
     name = "memory_log"
-    description = "Append a note to today's memory log. Use this to remember important things from the conversation."
+    description = """Append a note to today's memory log (users/{user_id}/memory/YYYY-MM-DD.md).
+Use this to remember important things from the conversation."""
     parameters = {
         "content": {
             "type": "string",

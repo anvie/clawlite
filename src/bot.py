@@ -95,6 +95,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         f"• 💻 Menjalankan command (terbatas)\n"
         f"• 🧠 Berpikir step-by-step\n\n"
         f"Commands:\n"
+        f"/new - Session baru (keep memory)\n"
         f"/clear - Hapus history\n"
         f"/tools - List available tools\n"
         f"/workspace - Lihat isi workspace",
@@ -109,6 +110,23 @@ async def clear(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     conversations[user_id] = []
     logger.info(f"🗑️ Cleared history for {user_id}")
     await update.message.reply_text("🗑️ History cleared.")
+
+
+async def new_session(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Start a new session without deleting memory or preferences."""
+    user_id = update.effective_user.id
+    if not is_allowed(user_id):
+        return
+    
+    # Clear in-memory conversation
+    conversations[user_id] = []
+    
+    # Insert session break marker (preserves history file)
+    from .conversation import insert_session_break
+    insert_session_break(f"tg_{user_id}")
+    
+    logger.info(f"🆕 New session started for {user_id}")
+    await update.message.reply_text("🆕 Session baru dimulai.\nMemory & preferences tetap ada.")
 
 
 async def tools_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -323,6 +341,7 @@ def main() -> None:
     application = Application.builder().token(TELEGRAM_TOKEN).build()
     
     application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("new", new_session))
     application.add_handler(CommandHandler("clear", clear))
     application.add_handler(CommandHandler("tools", tools_cmd))
     application.add_handler(CommandHandler("workspace", workspace_cmd))

@@ -339,6 +339,11 @@ class WhatsAppChannel(BaseChannel):
             
             self.logger.info(f"📩 Processing [{user_id}]: {text[:50]}...")
             
+            # Handle /new command (new session, keep memory)
+            if text.strip() == "/new":
+                await self._handle_new(user_id, raw_user_id)
+                return
+            
             # Handle /clear command
             if text.strip() == "/clear":
                 await self._handle_clear(user_id, raw_user_id)
@@ -462,6 +467,22 @@ class WhatsAppChannel(BaseChannel):
         
         self.logger.info(f"🗑️ Cleared history for {user_id}")
         await self.send_message(raw_user_id, "🗑️ History cleared.")
+    
+    async def _handle_new(self, user_id: str, raw_user_id: str) -> None:
+        """Handle /new command - start new session without deleting memory."""
+        # Clear in-memory history
+        self.conversations[user_id] = []
+        
+        # Insert session break marker (preserves history file)
+        try:
+            from ..conversation import insert_session_break, is_enabled
+            if is_enabled():
+                insert_session_break(user_id)
+        except Exception as e:
+            self.logger.warning(f"Failed to insert session break: {e}")
+        
+        self.logger.info(f"🆕 New session started for {user_id}")
+        await self.send_message(raw_user_id, "🆕 Session baru dimulai.\nMemory & preferences tetap ada.")
     
     async def _send_long_message(self, user_id: str, text: str, max_len: int = 4000) -> None:
         """Send long text in chunks."""

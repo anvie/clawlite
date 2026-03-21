@@ -125,6 +125,9 @@ def load_today(user_id: str) -> list[dict]:
     """
     Load today's conversation history.
     
+    Only returns messages after the last session break marker.
+    This allows /new command to start fresh without deleting history.
+    
     Args:
         user_id: Prefixed user ID
     
@@ -139,7 +142,9 @@ def load_today(user_id: str) -> list[dict]:
     if not convo_file.exists():
         return []
     
-    messages = []
+    all_messages = []
+    last_break_index = -1
+    
     try:
         with open(convo_file, "r", encoding="utf-8") as f:
             for line_num, line in enumerate(f, 1):
@@ -148,7 +153,13 @@ def load_today(user_id: str) -> list[dict]:
                     continue
                 try:
                     record = json.loads(line)
-                    messages.append({
+                    
+                    # Check for session break marker
+                    if record.get("type") == "session_break":
+                        last_break_index = len(all_messages)
+                        continue  # Don't add break marker to messages
+                    
+                    all_messages.append({
                         "role": record.get("role", "user"),
                         "content": record.get("content", ""),
                     })
@@ -156,10 +167,17 @@ def load_today(user_id: str) -> list[dict]:
                     logger.warning(f"Skipping corrupted line {line_num} in {convo_file}: {e}")
                     continue
         
-        logger.debug(f"Loaded {len(messages)} messages for {user_id}")
+        # Return only messages after the last session break
+        if last_break_index >= 0:
+            messages = all_messages[last_break_index:]
+        else:
+            messages = all_messages
+        
+        logger.debug(f"Loaded {len(messages)} messages for {user_id} (total: {len(all_messages)}, after break: {last_break_index})")
         
     except Exception as e:
         logger.error(f"Failed to load conversation for {user_id}: {e}")
+        return []
     
     return messages
 
@@ -182,6 +200,40 @@ def clear_today(user_id: str) -> bool:
         return True
     except Exception as e:
         logger.error(f"Failed to clear conversation for {user_id}: {e}")
+        return False
+
+
+def insert_session_break(user_id: str) -> bool:
+    """
+    Insert a session break marker into today's conversation file.
+    
+    This allows starting a new session without losing conversation history.
+    load_today() will only return messages after the last session break.
+    
+    Args:
+        user_id: Prefixed user ID
+    
+    Returns:
+        True if inserted successfully
+    """
+    try:
+        convo_file = get_today_file(user_id)
+        convo_file.parent.mkdir(parents=True, exist_ok=True)
+        
+        record = {
+            "ts": _now().isoformat(),
+            "role": "system",
+            "type": "session_break",
+        }
+        
+        with open(convo_file, "a", encoding="utf-8") as f:
+            f.write(json.dumps(record, ensure_ascii=False) + "\n")
+        
+        logger.info(f"Inserted session break for {user_id}")
+        return True
+        
+    except Exception as e:
+        logger.error(f"Failed to insert session break for {user_id}: {e}")
         return False
 
 

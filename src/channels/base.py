@@ -151,6 +151,10 @@ class BaseChannel(ABC):
         if not self.is_allowed(user_id):
             return "⛔ Not authorized."
         
+        # Handle /new command (new session, keep memory)
+        if text.strip() == "/new":
+            return await self._handle_new(user_id)
+        
         # Handle /clear command
         if text.strip() == "/clear":
             return await self._handle_clear(user_id)
@@ -242,6 +246,32 @@ class BaseChannel(ABC):
         except Exception as e:
             self.logger.error(f"Failed to clear data for {user_id}: {e}")
             return f"❌ Failed to clear: {str(e)[:200]}"
+    
+    async def _handle_new(self, user_id: str) -> str:
+        """
+        Handle /new command to start a new session without deleting memory.
+        
+        This inserts a session break marker in the conversation file.
+        The agent starts fresh but USER.md, MEMORY.md, and daily logs are preserved.
+        
+        Args:
+            user_id: Prefixed user ID
+        
+        Returns:
+            Confirmation message
+        """
+        try:
+            from ..conversation import insert_session_break, is_enabled
+            
+            if is_enabled():
+                insert_session_break(user_id)
+            
+            self.logger.info(f"New session started for {user_id}")
+            return "🆕 Session baru dimulai.\nMemory & preferences tetap ada."
+            
+        except Exception as e:
+            self.logger.error(f"Failed to start new session for {user_id}: {e}")
+            return f"❌ Failed: {str(e)[:200]}"
     
     async def _handle_dump(self, user_id: str) -> str:
         """

@@ -51,6 +51,7 @@ class TelegramChannel(BaseChannel):
         # Register handlers
         self.application.add_handler(CommandHandler("start", self._cmd_start))
         self.application.add_handler(CommandHandler("stop", self._cmd_stop))
+        self.application.add_handler(CommandHandler("new", self._cmd_new))
         self.application.add_handler(CommandHandler("clear", self._cmd_clear))
         self.application.add_handler(CommandHandler("tools", self._cmd_tools))
         self.application.add_handler(CommandHandler("workspace", self._cmd_workspace))
@@ -121,6 +122,7 @@ class TelegramChannel(BaseChannel):
             f"• 🧠 Berpikir step-by-step\n\n"
             f"Commands:\n"
             f"/stop - Stop current generation\n"
+            f"/new - Session baru (keep memory)\n"
             f"/clear - Hapus history\n"
             f"/tools - List available tools\n"
             f"/workspace - Lihat isi workspace",
@@ -162,6 +164,26 @@ class TelegramChannel(BaseChannel):
         
         self.logger.info(f"🗑️ Cleared history for {user_id}")
         await update.message.reply_text("🗑️ History cleared.")
+    
+    async def _cmd_new(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handle /new command - start new session without deleting memory."""
+        user_id = self.format_user_id(update.effective_user.id)
+        if not self.is_allowed(user_id):
+            return
+        
+        # Clear in-memory history
+        self.conversations[user_id] = []
+        
+        # Insert session break marker (preserves history file)
+        try:
+            from ..conversation import insert_session_break, is_enabled
+            if is_enabled():
+                insert_session_break(user_id)
+        except Exception as e:
+            self.logger.warning(f"Failed to insert session break: {e}")
+        
+        self.logger.info(f"🆕 New session started for {user_id}")
+        await update.message.reply_text("🆕 Session baru dimulai.\nMemory & preferences tetap ada.")
     
     async def _cmd_tools(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle /tools command."""

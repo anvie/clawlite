@@ -787,6 +787,7 @@ async def run_agent(
     consecutive_same_tool = 0  # Track consecutive calls of same tool
     last_tool_name = None  # Last tool called
     MAX_CONSECUTIVE_SAME_TOOL = 4  # Stop after this many consecutive same-tool calls
+    file_moves = {}  # Track file movements: old_path -> new_path
     
     while iterations < max_iterations:
         iterations += 1
@@ -992,6 +993,26 @@ async def run_agent(
                 }
                 all_tool_interactions.append(interaction)
                 
+                # Track file movements from run_bash mv commands
+                if tool_name == "run_bash" and result.success:
+                    script = tool_args.get("script", "")
+                    # Parse mv commands: mv source dest
+                    import shlex
+                    for line in script.split("\n"):
+                        line = line.strip()
+                        if line.startswith("mv "):
+                            try:
+                                parts = shlex.split(line)
+                                if len(parts) >= 3:
+                                    src, dst = parts[1], parts[2]
+                                    # If dst is a directory, append filename
+                                    if dst.endswith("/"):
+                                        dst = dst + os.path.basename(src)
+                                    file_moves[src] = dst
+                                    logger.info(f"Tracked file move: {src} -> {dst}")
+                            except:
+                                pass
+                
                 # Fire debug callback on failure
                 if not result.success and DEBUG_TOOL_ERRORS and debug_callback:
                     try:
@@ -999,8 +1020,14 @@ async def run_agent(
                     except Exception as e:
                         logger.warning(f"Debug callback failed: {e}")
                 
+                # Add file move context if any files were moved
+                file_move_context = ""
+                if file_moves:
+                    moves_str = "\n".join([f"  - {src} → {dst}" for src, dst in file_moves.items()])
+                    file_move_context = f"\n[FILE MOVES - use new paths:\n{moves_str}]\n"
+                
                 # Add to prompt for next iteration (LLM will interpret this)
-                full_prompt += f"{response_part}\n\n<tool_result>\n{result_text}\n</tool_result>\n\nassistant\n"
+                full_prompt += f"{response_part}\n\n<tool_result>\n{result_text}{file_move_context}\n</tool_result>\n\nassistant\n"
                 
             else:
                 error_text = f"Unknown tool: {tool_name}"

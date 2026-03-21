@@ -6,10 +6,11 @@
 
 # LLM settings
 llm:
-  # Provider: ollama | openrouter | llama-server | anthropic
+  # Provider: ollama | openrouter | llama-server | vllm | anthropic
   # - ollama: Ollama server (native /api/generate endpoint)
   # - openrouter: OpenRouter API (OpenAI-compatible)
-  # - llama-server: llama.cpp server (OpenAI-compatible, same protocol as openrouter)
+  # - llama-server: llama.cpp server (OpenAI-compatible)
+  # - vllm: vLLM server (OpenAI-compatible, best for Qwen3.5)
   # - anthropic: Anthropic Claude API
   provider: ollama
   
@@ -17,6 +18,7 @@ llm:
   # Ollama: llama3.2:3b, qwen2.5:7b, etc.
   # OpenRouter: google/gemini-2.0-flash-001, anthropic/claude-3.5-sonnet, etc.
   # llama-server: model loaded by llama-server (usually ignored)
+  # vLLM: /models/Qwen3.5-27B-NVFP4, etc. (path to model on server)
   # Anthropic: claude-sonnet-4-20250514, claude-3-5-haiku-20241022, etc.
   model: llama3.2:3b
   
@@ -24,6 +26,7 @@ llm:
   # Ollama: http://localhost:11434
   # OpenRouter: https://openrouter.ai/api/v1 (default, or custom)
   # llama-server: http://localhost:8080/v1
+  # vLLM: http://localhost:8000/v1
   # Anthropic: https://api.anthropic.com (default)
   base_url: http://localhost:11434
   
@@ -34,7 +37,9 @@ llm:
   # extended_thinking: true
   # thinking_budget: 10000
   
-  # llama-server / Qwen3.5 thinking toggle
+  # Thinking mode for vLLM/llama-server with Qwen3.5 models
+  # When true: model reasons internally for better responses
+  # The thinking is automatically parsed and hidden from users
   # enable_thinking: true
 
 # Translation layer (ID <-> EN)

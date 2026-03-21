@@ -5,7 +5,7 @@ A lightweight agentic AI framework with multi-channel support. Connect via Teleg
 ## Features
 
 - **Multi-channel** - Telegram and WhatsApp support (run one or both)
-- **Multi-provider LLM** - Works with Ollama, llama-server, OpenRouter, or Anthropic
+- **Multi-provider LLM** - Works with Ollama, llama-server, vLLM, OpenRouter, or Anthropic
 - **Tool calling** - Can read/write files, search, and execute commands
 - **Multi-user sessions** - Each user gets isolated persistent memory
 - **Workspace isolation** - Only has access to configured workspace directory
@@ -198,6 +198,16 @@ llm:
   base_url: http://localhost:8080/v1
 ```
 
+**vLLM (recommended for Qwen3.5):**
+
+```yaml
+llm:
+  provider: vllm
+  model: /models/Qwen3.5-27B-NVFP4
+  base_url: http://localhost:8000/v1
+  enable_thinking: true  # enables reasoning mode for better quality
+```
+
 **OpenRouter (cloud):**
 
 ```yaml
@@ -228,6 +238,8 @@ See [OpenRouter Models](https://openrouter.ai/models) for available models.
 | `write_file` | Create/overwrite file                | `path`, `content`                                     |
 | `edit_file`  | Edit file (text-based or line-based) | See modes below |
 | `list_dir`   | List directory contents              | `path` (default: `.`)                                 |
+| `analyze_image` | Analyze image with vision model   | `path` (returns base64 for LLM)                       |
+| `send_file`  | Send file to user                    | `path`, `caption` (optional)                          |
 
 **`edit_file` modes:**
 
@@ -496,7 +508,9 @@ After setup, users can still modify `SOUL.md` anytime by asking the bot or using
 ## Telegram Commands
 
 - `/start` - Welcome message
+- `/new` - Start new session (keeps memory, clears conversation context)
 - `/clear` - Clear conversation history
+- `/status` - Show current model, provider, and session stats
 - `/tools` - List available tools
 - `/workspace` - Show workspace contents
 
@@ -506,10 +520,11 @@ After setup, users can still modify `SOUL.md` anytime by asking the bot or using
 
 | Key                             | Description                                        | Default                  |
 | ------------------------------- | -------------------------------------------------- | ------------------------ |
-| `llm.provider`                  | LLM provider (`ollama`, `openrouter`, `llama-server`, `anthropic`) | `ollama`  |
+| `llm.provider`                  | LLM provider (`ollama`, `openrouter`, `llama-server`, `vllm`, `anthropic`) | `ollama`  |
 | `llm.model`                     | Model name/ID                                      | `llama3.2:3b`            |
 | `llm.base_url`                  | LLM server URL                                     | `http://localhost:11434` |
 | `llm.timeout`                   | Request timeout in seconds                         | `60`                     |
+| `llm.enable_thinking`           | Enable reasoning mode for vLLM/Qwen3.5             | `true`                   |
 | `channels.telegram.enabled`     | Enable Telegram channel                            | `true`                   |
 | `channels.whatsapp.enabled`     | Enable WhatsApp channel                            | `false`                  |
 | `channels.whatsapp.session_dir` | WhatsApp session storage                           | `/data/whatsapp`         |

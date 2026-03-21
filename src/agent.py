@@ -33,22 +33,34 @@ def get_history_limit() -> int:
 
 
 def strip_thinking_tags(text: str) -> str:
-    """Strip thinking/reasoning tags and leaked tool calls from response.
+    """Strip thinking/reasoning content from response, keeping only actual response.
     
-    Some models (like qwen3) output thinking in tags that shouldn't be shown to users.
-    Also strips orphaned closing tags and leaked <toolcall> blocks.
-    Handles models that wrap actual response in <response> tags.
+    Handles multiple formats:
+    1. Qwen3.5/vLLM: "Thinking Process:\n...\n</think>\n\nActual response"
+       (No opening <think> tag, just content ending with </think>)
+    2. Standard: "<think>...</think>Actual response"
+    3. Wrapped: "<response>Actual response</response>"
+    4. Fallback: Regex patterns for prose-style thinking leaks
     """
     if not text:
         return ""
     
-    # FIRST: Check if response is wrapped in <response> tags - extract only that
+    # PRIMARY: Qwen3.5/vLLM format - extract content AFTER </think>
+    # This handles the case where vLLM returns "Thinking Process:\n...\n</think>\n\nResponse"
+    think_end_match = re.search(r'</think>\s*', text, flags=re.IGNORECASE)
+    if think_end_match:
+        after_think = text[think_end_match.end():].strip()
+        if after_think:
+            # Successfully extracted response after thinking
+            return after_think
+    
+    # SECOND: Check if response is wrapped in <response> tags - extract only that
     response_match = re.search(r'<response>([\s\S]*?)</response>', text, flags=re.IGNORECASE)
     if response_match:
         # Model wrapped the actual response - use only that content
         text = response_match.group(1).strip()
     
-    # Remove complete thinking blocks (various tag formats)
+    # FALLBACK: Remove complete thinking blocks (various tag formats)
     text = re.sub(r'<think>[\s\S]*?</think>', '', text, flags=re.IGNORECASE)
     text = re.sub(r'<thought>[\s\S]*?</thought>', '', text, flags=re.IGNORECASE)
     text = re.sub(r'<thinking>[\s\S]*?</thinking>', '', text, flags=re.IGNORECASE)

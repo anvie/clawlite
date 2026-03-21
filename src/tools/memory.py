@@ -40,6 +40,21 @@ Use this to remember important things from the conversation."""
         if not self.user_id:
             return ToolResult(success=False, error="User ID not set")
         
+        # Validate content is not empty or placeholder
+        content = content.strip() if content else ""
+        if not content or content in ("...", ".", "-", "N/A", "none", "null"):
+            return ToolResult(
+                success=False, 
+                error="Content cannot be empty or placeholder. Please provide actual information to log."
+            )
+        
+        # Reject very short content that's likely a mistake
+        if len(content) < 10:
+            return ToolResult(
+                success=False,
+                error=f"Content too short ({len(content)} chars). Please provide meaningful information."
+            )
+        
         try:
             user_dir = get_user_dir(self.user_id)
             memory_dir = user_dir / "memory"
@@ -124,6 +139,14 @@ class MemoryUpdateTool(Tool):
     async def execute(self, content: str) -> ToolResult:
         if not self.user_id:
             return ToolResult(success=False, error="User ID not set")
+        
+        # Validate content
+        content = content.strip() if content else ""
+        if not content or content in ("...", ".", "-", "N/A", "none", "null"):
+            return ToolResult(
+                success=False,
+                error="Content cannot be empty or placeholder. Please provide actual information."
+            )
         
         try:
             user_dir = get_user_dir(self.user_id)

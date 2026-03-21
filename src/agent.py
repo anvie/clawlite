@@ -265,6 +265,13 @@ Before searching or re-analyzing files:
 3. Only use analyze_image if no description exists
 4. Don't repeat tool calls you've already made
 
+## Preventing Duplicates (IMPORTANT)
+Before appending to USER.md or any file:
+1. READ the file first to check existing content
+2. DO NOT add information that already exists
+3. Use edit_file with old_text/new_text to update existing entries
+4. Never append the same preference/info twice
+
 Be helpful, concise, and careful with file operations.
 """
 

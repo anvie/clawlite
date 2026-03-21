@@ -48,12 +48,14 @@ def strip_thinking_tags(text: str) -> str:
         # Model wrapped the actual response - use only that content
         text = response_match.group(1).strip()
     
-    # Remove complete <thought>...</thought> blocks (single line or multiline)
+    # Remove complete thinking blocks (various tag formats)
+    text = re.sub(r'<think>[\s\S]*?</think>', '', text, flags=re.IGNORECASE)
     text = re.sub(r'<thought>[\s\S]*?</thought>', '', text, flags=re.IGNORECASE)
-    # Remove complete <thinking>...</thinking> blocks
     text = re.sub(r'<thinking>[\s\S]*?</thinking>', '', text, flags=re.IGNORECASE)
     
     # Remove orphaned/incomplete tags (opening or closing)
+    text = re.sub(r'<think>', '', text, flags=re.IGNORECASE)
+    text = re.sub(r'</think>', '', text, flags=re.IGNORECASE)
     text = re.sub(r'<thought>', '', text, flags=re.IGNORECASE)
     text = re.sub(r'</thought>', '', text, flags=re.IGNORECASE)
     text = re.sub(r'<thinking>', '', text, flags=re.IGNORECASE)
@@ -529,7 +531,7 @@ async def _run_agent_native_tools(
     
     # Extract thinking content before stripping (for conversation log)
     thinking_content = None
-    thought_match = re.search(r'<thought>([\s\S]*?)</thought>', raw_response, re.IGNORECASE)
+    thought_match = re.search(r'<(?:thought|thinking|think)>([\s\S]*?)</(?:thought|thinking|think)>', raw_response, re.IGNORECASE)
     if thought_match:
         thinking_content = thought_match.group(1).strip()
     elif thinking_buffer:  # Use buffered thinking if available

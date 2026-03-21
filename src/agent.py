@@ -77,9 +77,10 @@ def strip_thinking_tags(text: str) -> str:
     text = re.sub(r'\{"tool":\s*"[^"]*"[^}]*\}', '', text)
     text = re.sub(r'\{"name":\s*"[^"]*"[^}]*\}', '', text)
     
-    # Remove prose-style internal thinking (common patterns at start of response)
+    # Remove prose-style internal thinking (common patterns)
     # These are internal monologue that shouldn't be shown to users
     prose_thinking_patterns = [
+        # Start of response patterns
         r'^The user is asking[^\n]*\n*',
         r'^I need to [^\n]*\n*',
         r'^Let me [^\n]*\n*',
@@ -88,9 +89,20 @@ def strip_thinking_tags(text: str) -> str:
         r'^I should [^\n]*\n*',
         r'^First,? I (will|should|need)[^\n]*\n*',
         r'^Now I (will|should|need|can)[^\n]*\n*',
+        # Numbered list reasoning (e.g., "1. User sent a photo")
+        r'^1\.\s+(User|I|The)[^\n]*\n(?:\d+\.[^\n]*\n)*',
+        # Mid-response reasoning patterns
+        r'^Actually,? (looking|I|the|this)[^\n]*\n*',
+        r'^Wait,? (I need|let me|this)[^\n]*\n*',
+        r'^This (is confusing|might be|seems)[^\n]*\n*',
+        r'^So the (photo|file|image)[^\n]*\n*',
     ]
     for pattern in prose_thinking_patterns:
         text = re.sub(pattern, '', text, flags=re.IGNORECASE | re.MULTILINE)
+    
+    # Remove blocks that look like step-by-step internal reasoning
+    # Pattern: multiple lines starting with numbers or "Step"
+    text = re.sub(r'(?:^(?:\d+\.|Step \d+:)[^\n]*\n){3,}', '', text, flags=re.MULTILINE)
     
     # Clean up excessive whitespace left behind
     text = re.sub(r'\n{3,}', '\n\n', text)

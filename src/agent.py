@@ -777,6 +777,9 @@ async def run_agent(
     MAX_JSON_FAILURES = 3  # Stop after this many consecutive failures
     all_tool_interactions = []  # Collect all tool calls + results for conversation log
     executed_tool_calls = set()  # Track executed calls to prevent duplicates
+    consecutive_same_tool = 0  # Track consecutive calls of same tool
+    last_tool_name = None  # Last tool called
+    MAX_CONSECUTIVE_SAME_TOOL = 4  # Stop after this many consecutive same-tool calls
     
     while iterations < max_iterations:
         iterations += 1
@@ -914,6 +917,18 @@ async def run_agent(
                 full_prompt += f"{response_part}\n\n<tool_result>\n(Skipped: duplicate call - already executed)\n</tool_result>\n\nassistant\n"
                 continue
             executed_tool_calls.add(call_key)
+            
+            # Check for too many consecutive same-tool calls (prevents loops)
+            if tool_name == last_tool_name:
+                consecutive_same_tool += 1
+                if consecutive_same_tool >= MAX_CONSECUTIVE_SAME_TOOL:
+                    logger.warning(f"Too many consecutive {tool_name} calls ({consecutive_same_tool}), breaking loop")
+                    full_prompt += f"{response_part}\n\n<tool_result>\n(Stopped: too many consecutive {tool_name} calls. Please summarize results and respond.)\n</tool_result>\n\nassistant\n"
+                    # Don't continue - let LLM generate final response
+                    break
+            else:
+                consecutive_same_tool = 1
+                last_tool_name = tool_name
             
             # Reset failure counter on successful parse
             json_parse_failures = 0
@@ -1075,6 +1090,25 @@ async def run_agent(
                 final_response = f"Result:\n```\n{last_tool_result['result']}\n```"
             else:
                 final_response = f"Error: {last_tool_result['result']}"
+    
+    # Ultimate fallback: if still empty but we have tool interactions, summarize them
+    if not final_response and all_tool_interactions:
+        logger.warning(f"Response still empty, generating summary from {len(all_tool_interactions)} tool interactions")
+        successful = [t for t in all_tool_interactions if t.get("success")]
+        failed = [t for t in all_tool_interactions if not t.get("success")]
+        
+        summary_parts = []
+        if successful:
+            summary_parts.append(f"✅ Berhasil menjalankan {len(successful)} operasi:")
+            for t in successful[:5]:  # Limit to 5
+                summary_parts.append(f"  - {t['tool']}")
+        if failed:
+            summary_parts.append(f"❌ {len(failed)} operasi gagal")
+        
+        if summary_parts:
+            final_response = "\n".join(summary_parts)
+        else:
+            final_response = "Operasi selesai."
     
     if is_translation_enabled():
         try:

@@ -77,6 +77,21 @@ def strip_thinking_tags(text: str) -> str:
     text = re.sub(r'\{"tool":\s*"[^"]*"[^}]*\}', '', text)
     text = re.sub(r'\{"name":\s*"[^"]*"[^}]*\}', '', text)
     
+    # Remove prose-style internal thinking (common patterns at start of response)
+    # These are internal monologue that shouldn't be shown to users
+    prose_thinking_patterns = [
+        r'^The user is asking[^\n]*\n*',
+        r'^I need to [^\n]*\n*',
+        r'^Let me [^\n]*\n*',
+        r'^Looking at [^\n]*\n*',
+        r'^Based on the (tool|previous)[^\n]*\n*',
+        r'^I should [^\n]*\n*',
+        r'^First,? I (will|should|need)[^\n]*\n*',
+        r'^Now I (will|should|need|can)[^\n]*\n*',
+    ]
+    for pattern in prose_thinking_patterns:
+        text = re.sub(pattern, '', text, flags=re.IGNORECASE | re.MULTILINE)
+    
     # Clean up excessive whitespace left behind
     text = re.sub(r'\n{3,}', '\n\n', text)
     
@@ -216,11 +231,19 @@ Wait for the tool result before continuing. You can chain multiple tool calls.
 3. Only allowed shell commands can be executed
 4. After completing a task, briefly summarize what you did
 
-## Reasoning
-Before answering questions involving logic or real-world scenarios:
-1. Think through the scenario step-by-step
-2. Consider what's physically/logically required
-3. Verify your answer makes practical sense
+## Reasoning (CRITICAL)
+Before answering ANY question involving logic, physical actions, or real-world scenarios:
+1. STOP and think: What is actually being asked?
+2. Consider physical requirements (e.g., "to wash a car, the car must BE there")
+3. Trace through the scenario step-by-step
+4. Ask yourself: "Does my answer make practical sense?"
+5. If unsure, reason out loud before giving final answer
+
+Example: "Go to car wash 50m away - walk or drive?"
+- Goal: wash the CAR
+- Requirement: car must be at car wash
+- Walking = car stays home = CANNOT wash it
+- Answer: DRIVE (even though 50m is short)
 
 ## Response Style
 - Keep responses brief and to the point
@@ -234,6 +257,13 @@ When processing multiple items (files, images, etc.):
 2. Process each one completely
 3. Verify all items done before final response
 4. Explicitly mention any failures
+
+## Efficiency
+Before searching or re-analyzing files:
+1. Check if you already have the information (from previous tool results, memory, or description files)
+2. Read existing documentation files first (e.g., photo-description.md)
+3. Only use analyze_image if no description exists
+4. Don't repeat tool calls you've already made
 
 Be helpful, concise, and careful with file operations.
 """

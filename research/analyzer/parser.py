@@ -4,11 +4,12 @@ Parses JSONL conversation logs into structured data.
 """
 
 import json
+import hashlib
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 import glob
 import re
 
@@ -165,23 +166,34 @@ def messages_to_exchanges(messages: List[Dict[str, Any]], user_id: str) -> List[
     return exchanges
 
 
+def get_file_hash(filepath: Path) -> str:
+    """Get a hash of file path + modification time + size."""
+    stat = filepath.stat()
+    content = f"{filepath}:{stat.st_mtime}:{stat.st_size}"
+    return hashlib.md5(content.encode()).hexdigest()[:12]
+
+
 def load_conversations(
     workspace_path: str,
     since: Optional[datetime] = None,
     min_exchanges: int = 2,
-) -> List[Conversation]:
+    processed_files: Optional[List[str]] = None,
+) -> Tuple[List[Conversation], List[str]]:
     """Load all conversations from workspace.
     
     Args:
         workspace_path: Path to ClawLite workspace
         since: Only load conversations since this datetime
         min_exchanges: Skip conversations with fewer exchanges
+        processed_files: List of file hashes already processed (skip these)
         
     Returns:
-        List of Conversation objects
+        Tuple of (List of Conversation objects, List of new file hashes)
     """
     conversations = []
+    new_file_hashes = []
     workspace = Path(workspace_path)
+    processed_set = set(processed_files or [])
     
     # Find all conversation files
     pattern = str(workspace / "users" / "*" / "conversations" / "convo-*.jsonl")
@@ -191,6 +203,12 @@ def load_conversations(
     
     for filepath in convo_files:
         filepath = Path(filepath)
+        
+        # Check if already processed (by file hash)
+        file_hash = get_file_hash(filepath)
+        if file_hash in processed_set:
+            logger.debug(f"Skipping already processed: {filepath}")
+            continue
         
         # Extract user_id from path
         # workspace/users/{user_id}/conversations/convo-YYYY-MM-DD.jsonl
@@ -232,9 +250,10 @@ def load_conversations(
             source_file=str(filepath),
         )
         conversations.append(convo)
-        logger.info(f"Loaded {len(exchanges)} exchanges from {filepath}")
+        new_file_hashes.append(file_hash)
+        logger.info(f"Loaded {len(exchanges)} exchanges from {filepath} (hash: {file_hash})")
     
-    return conversations
+    return conversations, new_file_hashes
 
 
 def get_conversations_since(

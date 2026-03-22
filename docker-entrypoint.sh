@@ -34,6 +34,7 @@ if [ "$(id -u)" = "0" ]; then
     
     # Build cron entries
     REMINDER_CRON="* * * * * cd /app && $ENV_VARS /usr/local/bin/python /app/scripts/reminder-daemon.py >> /tmp/reminder-daemon.log 2>&1"
+    # AutoImprove cron - runs analysis, Aisyah reviews via REVIEW_NEEDED.md
     AUTOIMPROVE_CRON="0 1 * * * cd /app && $ENV_VARS WORKSPACE_PATH=/workspace /usr/local/bin/python /app/research/autoimprove.py run >> /tmp/autoimprove.log 2>&1"
     
     # Install cron (remove old entries first if exist, then add new)

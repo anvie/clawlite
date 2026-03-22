@@ -329,7 +329,8 @@ async def stream_with_retry(prompt: str, images: list = None, max_retries: int =
             
             # Check if it's a retryable error
             retryable = any(x in error_name.lower() or x in str(e).lower() for x in [
-                'timeout', 'connection', 'network', 'temporary', '503', '502', '429'
+                'timeout', 'connection', 'network', 'temporary', '503', '502', '429',
+                'disconnect', 'remote', 'protocol', '500', 'server error',
             ])
             
             if retryable and attempt < max_retries - 1:

@@ -2,6 +2,7 @@
 
 import os
 import json
+import asyncio
 import httpx
 import logging
 from abc import ABC, abstractmethod
@@ -218,6 +219,10 @@ class OllamaProvider(LLMProvider):
                 response.raise_for_status()
                 
                 async for line in response.aiter_lines():
+                    # Allow cancellation (for /stop command)
+                    if asyncio.current_task().cancelled():
+                        raise asyncio.CancelledError()
+                    
                     if not line:
                         continue
                     
@@ -355,6 +360,10 @@ class OpenRouterProvider(LLMProvider):
                 response.raise_for_status()
                 
                 async for line in response.aiter_lines():
+                    # Allow cancellation (for /stop command)
+                    if asyncio.current_task().cancelled():
+                        raise asyncio.CancelledError()
+                    
                     if not line or not line.startswith("data: "):
                         continue
                     
@@ -573,6 +582,10 @@ class AnthropicProvider(LLMProvider):
                     raise Exception(f"Anthropic API error {response.status_code}: {error_text.decode()}")
                 
                 async for line in response.aiter_lines():
+                    # Allow cancellation (for /stop command)
+                    if asyncio.current_task().cancelled():
+                        raise asyncio.CancelledError()
+                    
                     if not line or not line.startswith("data: "):
                         continue
                     
@@ -679,6 +692,10 @@ class AnthropicProvider(LLMProvider):
                     raise Exception(f"Anthropic API error {response.status_code}: {error_text.decode()}")
                 
                 async for line in response.aiter_lines():
+                    # Allow cancellation (for /stop command)
+                    if asyncio.current_task().cancelled():
+                        raise asyncio.CancelledError()
+                    
                     if not line or not line.startswith("data: "):
                         continue
                     

@@ -38,6 +38,48 @@ def _today() -> date:
     return _now().date()
 
 
+def _format_tool_summary(tool_calls: list) -> str:
+    """Format tool calls into a readable summary for context.
+    
+    Creates a brief summary of what tools were executed and their results,
+    so the LLM understands what happened in previous turns.
+    """
+    if not tool_calls:
+        return ""
+    
+    summaries = []
+    for tc in tool_calls:
+        tool_name = tc.get("tool", "unknown")
+        args = tc.get("args", {})
+        result = tc.get("result", "")
+        success = tc.get("success", True)
+        
+        # Format args briefly
+        if isinstance(args, dict):
+            # Show key args, truncate long values
+            arg_parts = []
+            for k, v in args.items():
+                v_str = str(v)
+                if len(v_str) > 50:
+                    v_str = v_str[:47] + "..."
+                arg_parts.append(f"{k}={v_str}")
+            args_str = ", ".join(arg_parts[:3])  # Max 3 args shown
+            if len(args) > 3:
+                args_str += ", ..."
+        else:
+            args_str = str(args)[:50]
+        
+        # Format result briefly
+        result_str = str(result)[:100] if result else "(no output)"
+        if len(str(result)) > 100:
+            result_str += "..."
+        
+        status = "✓" if success else "✗"
+        summaries.append(f"[{status} {tool_name}({args_str}) → {result_str}]")
+    
+    return "[Tool executions: " + " ".join(summaries) + "]"
+
+
 def is_enabled() -> bool:
     """Check if conversation recording is enabled."""
     return config_get("conversation.record", False)
@@ -159,10 +201,20 @@ def load_today(user_id: str) -> list[dict]:
                         last_break_index = len(all_messages)
                         continue  # Don't add break marker to messages
                     
-                    all_messages.append({
+                    msg = {
                         "role": record.get("role", "user"),
                         "content": record.get("content", ""),
-                    })
+                    }
+                    
+                    # Include tool call summaries in assistant messages
+                    tool_calls = record.get("tool_calls")
+                    if tool_calls and msg["role"] == "assistant":
+                        tool_summary = _format_tool_summary(tool_calls)
+                        if tool_summary:
+                            # Prepend tool summary to content for context
+                            msg["content"] = f"{tool_summary}\n\n{msg['content']}" if msg["content"] else tool_summary
+                    
+                    all_messages.append(msg)
                 except json.JSONDecodeError as e:
                     logger.warning(f"Skipping corrupted line {line_num} in {convo_file}: {e}")
                     continue

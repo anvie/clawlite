@@ -27,6 +27,60 @@ logger = logging.getLogger(__name__)
 # Supported image extensions for vision
 IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.gif', '.webp'}
 
+# Image description prompt - concise but informative
+IMAGE_DESCRIBE_PROMPT = """Describe this image in 1-2 sentences. Focus on:
+- Main subject/scene
+- Key details (people, objects, location if identifiable)
+- Any text visible
+
+Be factual and concise. If it's a screenshot, mention the app/content."""
+
+
+async def describe_image_for_context(image_base64: str) -> str:
+    """Generate a brief description of an image for conversation context.
+    
+    This is called when user sends an image, so subsequent turns have
+    context about what was in the image even without re-sending it.
+    
+    Args:
+        image_base64: Base64 encoded image data
+        
+    Returns:
+        Brief description of the image, or empty string if failed
+    """
+    try:
+        from ..llm import get_provider
+        
+        provider = get_provider()
+        
+        # Check if provider supports images
+        if not hasattr(provider, 'stream_generate'):
+            logger.debug("Provider doesn't support image analysis for description")
+            return ""
+        
+        # Generate description
+        description = ""
+        async for token, _, _ in provider.stream_generate(
+            prompt=IMAGE_DESCRIBE_PROMPT,
+            images=[image_base64],
+            temperature=0.3,
+        ):
+            description += token
+        
+        # Clean up
+        description = description.strip()
+        
+        # Remove thinking tags if present
+        if "</think>" in description:
+            description = description.split("</think>")[-1].strip()
+        
+        logger.debug(f"Generated image description: {description[:100]}...")
+        return description
+        
+    except Exception as e:
+        logger.warning(f"Failed to generate image description: {e}")
+        return ""
+
 
 class TelegramChannel(BaseChannel):
     """Telegram messaging channel."""
@@ -546,7 +600,13 @@ class TelegramChannel(BaseChannel):
             with open(full_path, "rb") as f:
                 image_base64 = base64.b64encode(f.read()).decode("utf-8")
             
-            file_context = f"[User sent an image which is now visible to you. The image is also saved at: {relative_path}]"
+            # Generate image description for context persistence
+            description = await describe_image_for_context(image_base64)
+            if description:
+                file_context = f"[User sent an image: {description}. Image saved at: {relative_path}]"
+            else:
+                file_context = f"[User sent an image which is now visible to you. Image saved at: {relative_path}]"
+            
             await self._handle_message(update, context, file_context=file_context, images=[image_base64])
             
         except Exception as e:
@@ -585,7 +645,12 @@ class TelegramChannel(BaseChannel):
                 with open(full_path, "rb") as f:
                     image_base64 = base64.b64encode(f.read()).decode("utf-8")
                 images = [image_base64]
-                file_context = f"[User sent an image file which is now visible to you. The image is also saved at: {relative_path}]"
+                # Generate image description for context persistence
+                description = await describe_image_for_context(image_base64)
+                if description:
+                    file_context = f"[User sent an image file: {description}. Image saved at: {relative_path}]"
+                else:
+                    file_context = f"[User sent an image file which is now visible to you. Image saved at: {relative_path}]"
             else:
                 file_context = (
                     f"[User sent a file: {relative_path}]\n"

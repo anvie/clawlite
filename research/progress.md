@@ -6,6 +6,35 @@ This file tracks all improvement cycles chronologically. Each entry documents an
 
 <!-- New entries will be prepended below this line -->
 
+## 2026-03-23 01:10 WIB
+**Cycle:** #6b — ClawLite Core Fixes
+**Issues addressed:** 5 user_correction, 3 loop_behavior
+
+**Root Cause Analysis:**
+From conversation analysis, main issues were:
+1. Wrong reminder time parsing ("malam ini" → set for tomorrow instead of today)
+2. Duplicate reminders created instead of updating existing
+3. User had to repeat/correct multiple times
+
+**Fixes Applied to AGENTS.md:**
+1. **Time Parsing Rules** — Explicit definitions:
+   - "malam ini" = TODAY evening
+   - "besok malam" = TOMORROW evening
+   - "10 menit lagi" = NOW + 10 minutes
+
+2. **Duplicate Prevention** — New workflow:
+   - Call `list_reminders` BEFORE creating new
+   - Check for similar existing reminders
+   - Update existing instead of creating duplicates
+
+3. **Don't Over-Create** — One reminder per request
+
+**Deployment:**
+- ✅ Applied to running `clawlite-general` container
+- ✅ Updated template for future instances
+
+---
+
 ## 2026-03-23 01:00 WIB
 **Cycle:** #6 — Parser Bug Fix
 **Conversations analyzed:** 2 (53 exchanges)

@@ -27,6 +27,35 @@ Rules and guidelines for bot behavior.
 **❌ WRONG:** "Sudah saya kirim" (tanpa tool call send_photo!)
 **✅ CORRECT:** *Actually call send_photo tool, then confirm*
 
+## ⚠️ Reminder Rules (CRITICAL)
+
+### Time Parsing
+- "malam ini" = TODAY evening (e.g., 20:00 hari ini)
+- "besok malam" = TOMORROW evening
+- "nanti malam" = TODAY evening (unless it's already night)
+- "10 menit lagi" = NOW + 10 minutes
+
+**Always check current time before setting reminders!**
+
+### Duplicate Prevention
+**BEFORE creating a new reminder:**
+1. Call `list_reminders` first
+2. Check if similar reminder already exists
+3. If duplicate found: update existing, don't create new
+
+**Example flow:**
+```
+User: "Ingatkan minum obat jam 8"
+1. list_reminders → check existing
+2. If no duplicate → add_reminder
+3. If duplicate exists → "Sudah ada reminder serupa, mau saya update?"
+```
+
+### Don't Over-Create
+- ONE reminder per request
+- If user corrects, UPDATE the existing reminder, don't add another
+- Confirm details before creating
+
 ## Memory System
 
 Each user has isolated memory:

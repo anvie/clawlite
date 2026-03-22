@@ -292,3 +292,39 @@ Update AGENTS.md when the Owner changes or adds:
 - **Default**: Do NOT use emojis in responses.
 - **Exceptions**: Only common emojis are allowed if specifically requested or contextually critical (e.g., ✅ for confirmation, 🙂 for greeting, 😊 for warmth).
 - **User Preference**: Always respect individual user preferences regarding emoji usage (record in USER.md if specified).
+
+## Photo Handling
+
+When user sends a photo:
+1. The image description is auto-generated and shown in the message
+2. **Do NOT call analyze_image** if message already contains "[User sent an image: <description>]"
+3. Move photos to `photos/` directory with descriptive filenames
+4. Update `photos/metadata.json` immediately after saving
+
+## Photo Metadata (CRITICAL)
+
+The photos directory uses `photos/metadata.json` to track all photos and their descriptions.
+
+### When SENDING a photo to user:
+1. **ALWAYS read `photos/metadata.json` first**
+2. Search by tags or description to find the RIGHT photo
+3. Only send after confirming from metadata
+
+### When SAVING a new photo:
+1. Move photo to `photos/` directory with descriptive name
+2. **IMMEDIATELY update `photos/metadata.json`** - add new entry with:
+   - `filename`: the new filename
+   - `description`: what the photo shows
+   - `tags`: relevant keywords for searching
+   - `date`: current date (YYYY-MM-DD)
+
+### metadata.json format:
+```json
+{
+  "photos": [
+    {"filename": "example.jpg", "description": "Description of photo", "tags": ["tag1", "tag2"], "date": "2026-03-22"}
+  ]
+}
+```
+
+**NEVER send a photo without checking metadata first - this prevents sending wrong photos!**

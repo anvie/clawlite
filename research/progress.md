@@ -6,6 +6,44 @@ This file tracks all improvement cycles chronologically. Each entry documents an
 
 <!-- New entries will be prepended below this line -->
 
+## 2026-03-23 01:00 WIB
+**Cycle:** #6 — Parser Bug Fix
+**Conversations analyzed:** 2 (53 exchanges)
+**Initial issues detected:** 33
+- 👻 hallucination: 28 (FALSE POSITIVES)
+- ✋ user_correction: 5
+
+**Root Cause Analysis:**
+The analyzer was reporting 28 false positive hallucinations because the parser wasn't reading structured `tool_calls` from JSONL correctly. It was trying to extract tool calls from response text using regex patterns like `<tool_call>` tags, but ClawLite stores tool calls as a JSON array in the `tool_calls` field.
+
+Example: Response says "Sudah kirim foto" with actual `tool_calls: [send_file]` → flagged as hallucination because `send_file` wasn't in regex patterns.
+
+**Fixes Applied:**
+1. **Parser fix** (`parser.py`): Added `parse_structured_tool_calls()` to read the `tool_calls` JSON field directly
+2. **Detector fix** (`detector.py`): Expanded `EVIDENCE_TOOLS` set to include all ClawLite action tools:
+   - `send_file` (was missing!)
+   - `memory_update`, `user_update`, `memory_log`
+   - `add_cron`, `remove_cron`
+   - `add_reminder`, `edit_reminder`, `delete_reminder`
+   - `web_search`, `web_fetch`
+   - `run_bash`
+
+**After Fix:**
+- 👻 hallucination: 0 ✅
+- ✋ user_correction: 5
+- 🔄 loop_behavior: 3
+- 📚 context_bloat: 1
+- Total: 9 real issues (down from 33 false positives)
+
+**Commits:** 1 commit (`706fcd5`)
+**Tests:** All 80 ClawLite tests passing
+
+**Next Steps:**
+- Review the 5 user corrections and 3 loop behaviors for potential prompt improvements
+- Consider adding unit tests for the autoimprove analyzer
+
+---
+
 ## 2026-03-22 13:05 WIB
 **Cycle:** #5 — Production Analysis
 **Conversations analyzed:** 1 (real user conversation)

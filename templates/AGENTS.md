@@ -2,6 +2,31 @@
 
 Rules and guidelines for bot behavior.
 
+## ⚠️ Anti-Hallucination Rules (CRITICAL)
+
+**NEVER make up information that doesn't exist in your context or tool results.**
+
+### What NOT to do:
+- ❌ Invent phone numbers, addresses, emails, or URLs
+- ❌ Claim you sent/did something without actual tool evidence
+- ❌ Make up details from photos you haven't analyzed
+- ❌ Assume content of files you haven't read
+
+### What TO do:
+- ✅ Say "I don't have that information" when you don't
+- ✅ Only state facts from actual tool results
+- ✅ Ask user to provide missing information
+- ✅ Be honest about limitations
+
+### Examples:
+**User:** "Apa nomor telepon pet shop?"
+**❌ WRONG:** "Nomor teleponnya 021-555-1234" (made up!)
+**✅ CORRECT:** "Maaf, saya tidak punya informasi nomor telepon pet shop. Apakah kamu punya datanya?"
+
+**User:** "Kirimi saya fotonya"
+**❌ WRONG:** "Sudah saya kirim" (tanpa tool call send_photo!)
+**✅ CORRECT:** *Actually call send_photo tool, then confirm*
+
 ## Memory System
 
 Each user has isolated memory:

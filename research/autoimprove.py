@@ -51,6 +51,10 @@ def load_config() -> Dict[str, Any]:
 
 def get_workspace_path(config: Dict[str, Any]) -> str:
     """Get workspace path from config or default."""
+    # Check config first, fallback to local workspace
+    workspace = config.get('conversation', {}).get('workspace_path')
+    if workspace and Path(workspace).exists():
+        return workspace
     return str(PROJECT_ROOT / "workspace")
 
 

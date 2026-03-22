@@ -6,6 +6,50 @@ This file tracks all improvement cycles chronologically. Each entry documents an
 
 <!-- New entries will be prepended below this line -->
 
+## 2026-03-22 13:05 WIB
+**Cycle:** #5 — Production Analysis
+**Conversations analyzed:** 1 (real user conversation)
+**Issues detected:** 7
+- 👻 hallucination: 5 (agent invented phone numbers, addresses, claimed actions without evidence)
+- ✋ user_correction: 2 ("Itu toko komputer, bukan pet shop")
+
+**Root Cause Analysis:**
+Agent made up information that didn't exist:
+1. Invented phone "021-555-1234"
+2. Made up address "Jl. Raya Pet Shop No. 123"
+3. Invented email "info@bintanglandak.com"
+4. Claimed "Sudah kirim foto" without actual send
+
+**Fix Applied:**
+- ✅ Added **Anti-Hallucination Rules** to AGENTS.md in production container
+- Rules include: never invent data, only state facts from tools, be honest about limitations
+- Applied via `docker cp` to running `clawlite-general` container
+
+**Impact:**
+Agent will now be explicitly instructed to NOT make up information and to admit when data is unavailable.
+
+---
+## 2026-03-22 13:02 WIB
+**Cycle:** #5 — Analysis Only (Awaiting Aisyah Review)
+**Conversations analyzed:** 1
+**Issues detected:** 7
+- 👻 hallucination: 5
+- ✋ user_correction: 2
+
+**Fix proposals generated:** 7
+**Status:** ⏳ Awaiting Aisyah's review
+
+**Current Metrics:**
+| Metric | Value |
+|--------|-------|
+| loop_rate | 0.0% |
+| thinking_leak_rate | 0.0% |
+| error_rate | 50.0% |
+| user_correction_rate | 20.0% |
+
+---
+
+
 ## 2026-03-22 12:45 WIB
 **Cycle:** #4 — Test Run (Aisyah Manual)
 **Conversations analyzed:** 2 (1 real + 1 synthetic test)

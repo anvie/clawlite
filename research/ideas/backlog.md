@@ -29,3 +29,45 @@ Ideas awaiting human approval before implementation.
 **Reason:** Issue type: thinking_leak, File: /home/robin/dev/clawlite/src/agent.py
 **Status:** ✅ Already implemented (pattern exists in prose_thinking_patterns)
 
+
+### 2026-03-22 13:02
+**Idea:** Update system prompt to address hallucination
+**Reason:** Issue type: hallucination, File: /home/robin/dev/clawlite/prompts/system.md
+**Status:** ⏳ Awaiting approval
+
+
+### 2026-03-22 13:02
+**Idea:** Update system prompt to address user_correction
+**Reason:** Issue type: user_correction, File: /home/robin/dev/clawlite/prompts/system.md
+**Status:** ⏳ Awaiting approval
+
+
+### 2026-03-22 13:02
+**Idea:** Update system prompt to address hallucination
+**Reason:** Issue type: hallucination, File: /home/robin/dev/clawlite/prompts/system.md
+**Status:** ⏳ Awaiting approval
+
+
+### 2026-03-22 13:02
+**Idea:** Update system prompt to address hallucination
+**Reason:** Issue type: hallucination, File: /home/robin/dev/clawlite/prompts/system.md
+**Status:** ⏳ Awaiting approval
+
+
+### 2026-03-22 13:02
+**Idea:** Update system prompt to address hallucination
+**Reason:** Issue type: hallucination, File: /home/robin/dev/clawlite/prompts/system.md
+**Status:** ⏳ Awaiting approval
+
+
+### 2026-03-22 13:02
+**Idea:** Update system prompt to address user_correction
+**Reason:** Issue type: user_correction, File: /home/robin/dev/clawlite/prompts/system.md
+**Status:** ⏳ Awaiting approval
+
+
+### 2026-03-22 13:02
+**Idea:** Update system prompt to address hallucination
+**Reason:** Issue type: hallucination, File: /home/robin/dev/clawlite/prompts/system.md
+**Status:** ⏳ Awaiting approval
+

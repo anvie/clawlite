@@ -6,6 +6,34 @@ This file tracks all improvement cycles chronologically. Each entry documents an
 
 <!-- New entries will be prepended below this line -->
 
+## 2026-03-23 01:15 WIB
+**Cycle:** #7 — AutoImprove System Upgrade
+**Enhancement:** System now fixes ClawLite core, not just analyzer
+
+**Changes:**
+1. **`program.md`** — Updated to clarify fix targets (production + dev)
+2. **`config.yaml`** — Added `fix_targets` section with paths
+3. **`fixer/clawlite_fixer.py`** — NEW module for ClawLite core fixes:
+   - `apply_to_production()` — Apply to running container via docker cp
+   - `apply_to_dev()` — Apply to dev repo templates/src
+   - `add_section_to_agents_md()` — Add rules to AGENTS.md
+   - `update_agent_py_constant()` — Update constants in agent.py
+   - `add_thinking_pattern()` — Add patterns to strip
+   - `git_commit_and_push()` — Commit & push to GitHub
+
+**Fix Flow:**
+```
+Issue Detected → Analyze Root Cause → Generate Fix
+      ↓
+Apply to Production (immediate effect via docker cp)
+      ↓
+Apply to Dev Repo (for future instances)
+      ↓
+Git Commit & Push
+```
+
+---
+
 ## 2026-03-23 01:10 WIB
 **Cycle:** #6b — ClawLite Core Fixes
 **Issues addressed:** 5 user_correction, 3 loop_behavior

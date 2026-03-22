@@ -7,9 +7,49 @@ This system is **run entirely by Aisyah** (OpenClaw main agent). Aisyah analyzes
 Aisyah actively improves ClawLite agent performance by:
 1. Analyzing real user conversations daily
 2. Detecting performance issues using pattern matching
-3. Implementing fixes directly in the codebase
+3. **Implementing fixes in ClawLite core** (not just the analyzer!)
 4. Testing changes before committing
 5. Tracking all improvements in progress.md
+
+## Fix Targets (IMPORTANT)
+
+When issues are detected, Aisyah fixes **BOTH**:
+
+### 1. Production Instance (immediate effect)
+```
+/home/robin/.clawlite/instances/general/workspace/
+├── AGENTS.md      ← Agent behavior rules
+├── TOOLS.md       ← Tool usage notes
+├── SOUL.md        ← Persona
+└── users/         ← User-specific data
+```
+
+### 2. Dev Repository (for future instances)
+```
+~/dev/clawlite/
+├── templates/
+│   ├── AGENTS.md  ← Template for new instances
+│   ├── TOOLS.md
+│   └── SOUL.md
+├── src/           ← Core Python code
+│   ├── agent.py   ← Agent loop, thinking patterns
+│   ├── tools/     ← Tool implementations
+│   └── ...
+└── prompts/
+    └── system.md  ← System prompt
+```
+
+### Fix Types by Issue
+
+| Issue Type | Fix Location |
+|------------|--------------|
+| `hallucination` | AGENTS.md (anti-hallucination rules) |
+| `user_correction` | AGENTS.md (clarify instructions) |
+| `loop_behavior` | src/agent.py (MAX_CONSECUTIVE_SAME_TOOL) |
+| `thinking_leak` | src/agent.py (THINKING_PATTERNS) |
+| `empty_response` | src/agent.py (response handling) |
+| `context_bloat` | src/agent.py (file read dedup) |
+| `reminder_issues` | AGENTS.md (reminder rules) |
 
 ## Workflow
 

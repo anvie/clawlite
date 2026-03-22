@@ -351,7 +351,8 @@ class AgentResult:
     """Result from agent run."""
     response: str
     history: list[dict]
-    file_data: Optional[dict] = None  # For file responses from skills
+    file_data: Optional[dict] = None  # For single file (legacy, deprecated)
+    files: Optional[list] = None  # For multiple file responses from skills
 
 
 async def _run_agent_native_tools(
@@ -420,7 +421,7 @@ async def _run_agent_native_tools(
     iterations = 0
     accumulated_text = ""
     thinking_buffer = ""
-    pending_file_data = None
+    pending_files = []  # Track file data from skills (supports multiple files)
     last_tool_result = None
     all_tool_interactions = []  # Collect all tool calls + results for conversation log
     
@@ -544,7 +545,7 @@ async def _run_agent_native_tools(
                 
                 # Check for file data
                 if result.file_data:
-                    pending_file_data = result.file_data
+                    pending_files.append(result.file_data)
                     result_text = f"File ready: {result.file_data.get('filename', 'file')}"
                     logger.info(f"Tool {tc.name} returned file: {result.file_data.get('filename')}")
                 elif result.success:
@@ -664,7 +665,7 @@ async def _run_agent_native_tools(
     return AgentResult(
         response=final_response,
         history=new_history,
-        file_data=pending_file_data,
+        files=pending_files if pending_files else None,
     )
 
 
@@ -803,7 +804,7 @@ async def run_agent(
     accumulated_response = ""
     thinking_shown = False
     last_tool_result = None  # Track last tool result for fallback
-    pending_file_data = None  # Track file data from skills
+    pending_files = []  # Track file data from skills (supports multiple files)
     pending_images = []  # Track images from tool results (analyze_image)
     json_parse_failures = 0  # Track consecutive JSON parse failures
     MAX_JSON_FAILURES = 3  # Stop after this many consecutive failures
@@ -994,7 +995,7 @@ async def run_agent(
                         logger.info(f"Tool {tool_name} returned image for analysis: {result.file_data.get('filename')}")
                     else:
                         # Regular file to be sent to user
-                        pending_file_data = result.file_data
+                        pending_files.append(result.file_data)
                         result_text = f"File ready: {result.file_data.get('filename', 'file')}"
                         logger.info(f"Tool {tool_name} returned file: {result.file_data.get('filename')}")
                 elif result.success:
@@ -1205,5 +1206,5 @@ async def run_agent(
     return AgentResult(
         response=final_response,
         history=new_history,
-        file_data=pending_file_data,
+        files=pending_files if pending_files else None,
     )

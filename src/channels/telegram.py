@@ -409,10 +409,13 @@ class TelegramChannel(BaseChannel):
             
             self.conversations[user_id] = result.history
             
-            # Handle file response from skills
-            if result.file_data:
+            # Handle file responses from skills (supports multiple files)
+            if result.files:
+                for file_data in result.files:
+                    await self._send_file(update, status_msg, file_data)
+                # Don't return early - continue to send text response if any
+            elif result.file_data:  # Legacy single file support
                 await self._send_file(update, status_msg, result.file_data)
-                return
             
             # Clean up response
             import re

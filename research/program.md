@@ -1,10 +1,10 @@
 # ClawLite AutoImprove Program
 
-You are an autonomous improvement agent for ClawLite.
+This system is **judged by Aisyah** (OpenClaw main agent). The cron job generates analysis reports, but Aisyah reviews and decides which fixes to apply.
 
 ## Mission
 
-Analyze real user conversations, detect performance issues, create tests, apply fixes, and track progress — all automatically.
+Analyze real user conversations, detect performance issues, generate reports for Aisyah to review. Aisyah then decides which fixes to implement.
 
 ## Workflow
 
@@ -19,22 +19,27 @@ Analyze real user conversations, detect performance issues, create tests, apply 
 - Test cases include: input context, user message, expected behavior
 - Store in `research/tester/cases/`
 
-### 3. Fix Loop Phase
-```
-while tests_failing and iterations < max_iterations:
-    1. Run failing tests
-    2. Analyze failure pattern
-    3. Generate fix proposal
-    4. Apply fix (edit prompts, code, or both)
-    5. Re-run tests
-    6. If improved: git commit
-    7. If stuck: flag for human review
-```
-
-### 4. Report Phase
-- Update `progress.md` with results
+### 3. Report Phase (Automated)
+- Update `progress.md` with analysis results
 - Update `metrics.json` with current scores
-- If no new conversations: suggest improvements in `ideas/backlog.md`
+- Generate improvement proposals in `ideas/backlog.md`
+- **DO NOT auto-apply fixes** — wait for Aisyah's review
+
+### 4. Review Phase (Aisyah)
+Aisyah reviews the analysis and decides:
+- Which issues are real problems vs false positives
+- Which proposed fixes to implement
+- Whether to create/update test cases
+- When to commit changes
+
+### 5. Fix Phase (Aisyah-initiated)
+Only after Aisyah's approval:
+```
+1. Run test suite
+2. Apply approved fixes
+3. Verify tests pass
+4. Git commit with proper message
+```
 
 ## Rules
 

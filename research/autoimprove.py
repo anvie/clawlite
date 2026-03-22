@@ -28,7 +28,7 @@ PROJECT_ROOT = RESEARCH_DIR.parent
 sys.path.insert(0, str(RESEARCH_DIR))
 
 from analyzer import load_conversations, analyze_conversations, Issue
-from tester import generate_test_case, TestCase, run_tests, load_test_cases, save_test_cases
+from tester import generate_test_case, TestCase, run_tests, load_test_cases, save_test_cases, run_tests_from_dir
 from fixer import propose_fix, apply_fix, apply_fixes, FixProposal
 
 # Configure logging
@@ -354,77 +354,170 @@ def cmd_report(args) -> None:
 
 
 def cmd_run(args) -> None:
-    """Run full improvement cycle (for cron)."""
-    logger.info("Starting full AutoImprove cycle")
+    """Run analysis cycle (for cron) — NO auto-fix, Aisyah reviews.
+    
+    This generates a report for Aisyah to review. Fixes are only
+    applied when Aisyah explicitly runs the fix command.
+    """
+    logger.info("Starting AutoImprove analysis cycle (Aisyah will review)")
     
     config = load_config()
     
-    # 1. Analyze
+    # 1. Analyze conversations
     analysis = cmd_analyze(args)
     
-    if analysis.get('total_issues', 0) == 0:
-        logger.info("No issues found, checking for improvement ideas")
-        
-        # Add improvement idea if no conversations
-        if analysis.get('conversations', 0) == 0:
-            add_to_backlog(
-                "No new conversations to analyze",
-                "Consider adding synthetic test cases or reviewing existing ones",
-            )
+    conversations_count = analysis.get('conversations_analyzed', 0)
+    issues_count = analysis.get('total_issues', 0)
+    
+    if conversations_count == 0:
+        logger.info("No new conversations to analyze")
         return
     
-    # 2. Generate tests
+    if issues_count == 0:
+        logger.info("No issues found - ClawLite is performing well!")
+        # Still update progress to track
+        update_analysis_report(
+            conversations_analyzed=conversations_count,
+            issues_by_type={},
+            metrics=analysis.get('metrics', {}),
+            proposals=[],
+        )
+        return
+    
+    # 2. Generate fix proposals (but don't apply!)
     issues = analysis.get('issues', [])
-    new_tests = []
+    proposals = []
+    
     for issue in issues:
-        tc = generate_test_case(issue)
-        new_tests.append(tc)
+        # Create a fake result/test_case to propose a fix
+        fake_result = type('FakeResult', (), {
+            'passed': False,
+            'test_id': f'issue_{issue.type}',
+            'response': issue.exchange.assistant_response,
+            'tool_calls': [],
+            'duration_ms': 0,
+        })()
+        fake_tc = type('FakeTC', (), {
+            'id': f'issue_{issue.type}',
+            'issue_type': issue.type,
+            'user_message': issue.exchange.user_message,
+        })()
+        
+        proposal = propose_fix(fake_result, fake_tc, str(PROJECT_ROOT))
+        if proposal:
+            proposals.append(proposal)
+            # Add to backlog for Aisyah's review
+            add_to_backlog(
+                idea=proposal.description,
+                reason=f"Issue type: {issue.type}, File: {proposal.file_path}",
+            )
     
-    if new_tests:
-        save_test_cases(new_tests, str(RESEARCH_DIR / "tester" / "cases"))
-    
-    # Get metrics before
-    workspace_path = get_workspace_path(config)
-    metrics_before = analysis.get('metrics', {})
-    
-    # 3. Run fix loop
-    fix_results = cmd_fix(args)
-    
-    # 4. Re-analyze to get metrics after
-    analysis_after = cmd_analyze(args)
-    metrics_after = analysis_after.get('metrics', {})
-    
-    # 5. Update progress
-    # Count how many cycles we've done
-    progress_path = RESEARCH_DIR / "progress.md"
-    content = progress_path.read_text()
-    cycle = content.count("**Cycle:**") + 1
-    
-    # Count pending review items
-    pending = sum(1 for issue in issues if any(
-        p.requires_review for p in [propose_fix(
-            type('FakeResult', (), {'passed': False, 'test_id': 'x', 'response': issue.exchange.assistant_response, 'tool_calls': [], 'duration_ms': 0})(),
-            type('FakeTC', (), {'id': 'x', 'issue_type': issue.type, 'user_message': issue.exchange.user_message})(),
-            str(PROJECT_ROOT)
-        )] if p
-    ))
-    
-    update_progress(
-        cycle=cycle,
-        conversations_analyzed=analysis.get('conversations_analyzed', 0),
+    # 3. Update progress with analysis results (no fixes applied)
+    update_analysis_report(
+        conversations_analyzed=conversations_count,
         issues_by_type=analysis.get('issues_by_type', {}),
-        tests_created=len(new_tests),
-        fix_iterations=fix_results.get('iterations', 0),
-        commits=fix_results.get('commits', []),
-        metrics_before=metrics_before,
-        metrics_after=metrics_after,
-        pending_review=pending,
+        metrics=analysis.get('metrics', {}),
+        proposals=proposals,
     )
     
-    # 6. Update metrics
-    update_metrics(metrics_after)
+    # 4. Notify Aisyah (via file that she can check)
+    notify_path = RESEARCH_DIR / "REVIEW_NEEDED.md"
+    notify_path.write_text(f"""# AutoImprove Analysis Ready for Review
+
+**Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M WIB')}
+
+## Summary
+- **Conversations analyzed:** {conversations_count}
+- **Issues detected:** {issues_count}
+- **Fix proposals:** {len(proposals)}
+
+## Issues by Type
+{chr(10).join([f"- {t}: {c}" for t, c in analysis.get('issues_by_type', {}).items()])}
+
+## Action Required
+Aisyah, please review:
+1. Check `research/progress.md` for details
+2. Review proposals in `research/ideas/backlog.md`
+3. Run `python research/autoimprove.py fix` to apply approved fixes
+
+---
+*Delete this file after review*
+""")
     
-    logger.info("AutoImprove cycle complete")
+    logger.info(f"Analysis complete: {issues_count} issues found, {len(proposals)} fix proposals")
+    logger.info("Created REVIEW_NEEDED.md for Aisyah to review")
+
+
+def update_analysis_report(
+    conversations_analyzed: int,
+    issues_by_type: Dict[str, int],
+    metrics: Dict[str, float],
+    proposals: List[Any],
+) -> None:
+    """Update progress.md with analysis results (no fixes)."""
+    progress_path = RESEARCH_DIR / "progress.md"
+    
+    # Read existing content
+    content = progress_path.read_text()
+    
+    # Count cycles
+    cycle = content.count("**Cycle:**") + 1
+    
+    # Generate new entry
+    now = datetime.now()
+    timestamp = now.strftime('%Y-%m-%d %H:%M WIB')
+    
+    # Issue emoji mapping
+    issue_emoji = {
+        'loop_behavior': '🔄',
+        'thinking_leak': '💭',
+        'empty_response': '📭',
+        'user_correction': '✋',
+        'hallucination': '👻',
+        'context_bloat': '📚',
+        'slow_response': '🐢',
+    }
+    
+    # Format issues
+    issues_str = ""
+    for issue_type, count in issues_by_type.items():
+        emoji = issue_emoji.get(issue_type, '❓')
+        issues_str += f"- {emoji} {issue_type}: {count}\n"
+    
+    if not issues_str:
+        issues_str = "- ✅ No issues detected\n"
+    
+    # Format metrics
+    metrics_rows = ""
+    for metric, value in metrics.items():
+        if value is not None:
+            metrics_rows += f"| {metric} | {value:.1f}% |\n"
+    
+    entry = f"""
+## {timestamp}
+**Cycle:** #{cycle} — Analysis Only (Awaiting Aisyah Review)
+**Conversations analyzed:** {conversations_analyzed}
+**Issues detected:** {sum(issues_by_type.values())}
+{issues_str}
+**Fix proposals generated:** {len(proposals)}
+**Status:** ⏳ Awaiting Aisyah's review
+
+**Current Metrics:**
+| Metric | Value |
+|--------|-------|
+{metrics_rows}
+---
+"""
+    
+    # Insert after the header comment
+    insert_marker = "<!-- New entries will be prepended below this line -->"
+    if insert_marker in content:
+        content = content.replace(insert_marker, insert_marker + entry)
+    else:
+        content += entry
+    
+    progress_path.write_text(content)
+    logger.info(f"Updated progress.md with cycle #{cycle}")
 
 
 def main():

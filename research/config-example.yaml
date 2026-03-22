@@ -8,7 +8,7 @@ vllm:
 conversation:
   source_pattern: "workspace/users/*/conversations/convo-*.jsonl"
   min_exchanges: 2  # Skip very short conversations
-  lookback_hours: 720  # Analyze last 30 days of convos (for testing)
+  lookback_hours: 24  # Analyze last 24h of convos
 
 analysis:
   patterns:

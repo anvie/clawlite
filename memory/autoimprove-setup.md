@@ -43,8 +43,9 @@ Implemented autonomous agent improvement system inspired by Karpathy's autoresea
 4. **Report** — Update progress.md with results, update metrics.json
 
 ### Cron Schedule
-- Daily at **01:00 WIB** via docker-entrypoint.sh
-- Triggered by `python research/autoimprove.py run`
+- Daily at **01:00 WIB** via **OpenClaw cron** (not Docker)
+- Aisyah runs the entire cycle: analyze → fix → commit → report
+- Cron job ID: `1f3b81bd-7581-40ec-b94c-30e42dc5ee62`
 
 ### Files Changed
 - 19 files created/modified

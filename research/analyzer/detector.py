@@ -185,6 +185,18 @@ def detect_slow_response(exchange: Exchange) -> Optional[Issue]:
     return None
 
 
+# Tools that provide evidence for action claims
+EVIDENCE_TOOLS = {
+    'write_file', 'exec', 'send_message', 'edit_file',
+    'send_file',  # ClawLite's file sending tool
+    'memory_update', 'user_update', 'memory_log',  # Memory operations
+    'add_cron', 'remove_cron',  # Cron operations
+    'add_reminder', 'edit_reminder', 'delete_reminder',  # Reminder operations
+    'web_search', 'web_fetch',  # Web operations (evidence for "searched" claims)
+    'run_bash',  # Shell execution
+}
+
+
 def detect_hallucination(exchange: Exchange) -> Optional[Issue]:
     """Detect potential hallucinations (claims without tool evidence)."""
     response = exchange.assistant_response
@@ -196,8 +208,8 @@ def detect_hallucination(exchange: Exchange) -> Optional[Issue]:
             # Check if there's a relevant tool call
             has_evidence = False
             for tc in tool_calls:
-                # If there's any tool call, assume it might be evidence
-                if tc.name in ('write_file', 'exec', 'send_message', 'edit_file'):
+                # Check against expanded evidence tools list
+                if tc.name in EVIDENCE_TOOLS:
                     has_evidence = True
                     break
             

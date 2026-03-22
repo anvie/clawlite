@@ -130,6 +130,26 @@ def parse_jsonl_file(filepath: Path) -> List[Dict[str, Any]]:
     return messages
 
 
+def parse_structured_tool_calls(tool_calls_data: List[Dict[str, Any]]) -> List[ToolCall]:
+    """Parse structured tool_calls from JSONL format."""
+    tool_calls = []
+    for tc in tool_calls_data:
+        # Handle both "tool" and "name" keys for tool name
+        name = tc.get('tool') or tc.get('name', 'unknown')
+        # Handle both "args" and "arguments" keys
+        args = tc.get('args') or tc.get('arguments', {})
+        result = tc.get('result')
+        duration = tc.get('duration_ms')
+        
+        tool_calls.append(ToolCall(
+            name=name,
+            arguments=args,
+            result=result,
+            duration_ms=duration,
+        ))
+    return tool_calls
+
+
 def messages_to_exchanges(messages: List[Dict[str, Any]], user_id: str) -> List[Exchange]:
     """Convert raw messages to Exchange objects."""
     exchanges = []
@@ -151,10 +171,17 @@ def messages_to_exchanges(messages: List[Dict[str, Any]], user_id: str) -> List[
                 delta = ts - current_user_ts
                 duration_ms = int(delta.total_seconds() * 1000)
             
+            # First check for structured tool_calls field, then fall back to text extraction
+            structured_tc = msg.get('tool_calls', [])
+            if structured_tc:
+                tool_calls = parse_structured_tool_calls(structured_tc)
+            else:
+                tool_calls = extract_tool_calls(content)
+            
             exchange = Exchange(
                 user_message=current_user_msg,
                 assistant_response=content,
-                tool_calls=extract_tool_calls(content),
+                tool_calls=tool_calls,
                 timestamp=current_user_ts,
                 duration_ms=duration_ms,
                 user_id=user_id,

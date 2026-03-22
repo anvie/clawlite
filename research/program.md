@@ -1,10 +1,15 @@
 # ClawLite AutoImprove Program
 
-This system is **judged by Aisyah** (OpenClaw main agent). The cron job generates analysis reports, but Aisyah reviews and decides which fixes to apply.
+This system is **run entirely by Aisyah** (OpenClaw main agent). Aisyah analyzes conversations, detects issues, implements fixes, and tracks progress autonomously.
 
 ## Mission
 
-Analyze real user conversations, detect performance issues, generate reports for Aisyah to review. Aisyah then decides which fixes to implement.
+Aisyah actively improves ClawLite agent performance by:
+1. Analyzing real user conversations daily
+2. Detecting performance issues using pattern matching
+3. Implementing fixes directly in the codebase
+4. Testing changes before committing
+5. Tracking all improvements in progress.md
 
 ## Workflow
 
@@ -19,27 +24,19 @@ Analyze real user conversations, detect performance issues, generate reports for
 - Test cases include: input context, user message, expected behavior
 - Store in `research/tester/cases/`
 
-### 3. Report Phase (Automated)
-- Update `progress.md` with analysis results
-- Update `metrics.json` with current scores
-- Generate improvement proposals in `ideas/backlog.md`
-- **DO NOT auto-apply fixes** — wait for Aisyah's review
+### 3. Fix Phase (Aisyah implements)
+For each detected issue, Aisyah:
+1. Evaluates if it's a real problem or false positive
+2. Identifies the root cause in the codebase
+3. Implements the fix (edit prompts, agent.py, tools, etc.)
+4. Tests the fix locally if possible
+5. Commits with descriptive message: `autoimprove: <description>`
 
-### 4. Review Phase (Aisyah)
-Aisyah reviews the analysis and decides:
-- Which issues are real problems vs false positives
-- Which proposed fixes to implement
-- Whether to create/update test cases
-- When to commit changes
-
-### 5. Fix Phase (Aisyah-initiated)
-Only after Aisyah's approval:
-```
-1. Run test suite
-2. Apply approved fixes
-3. Verify tests pass
-4. Git commit with proper message
-```
+### 4. Report Phase
+After each cycle, Aisyah updates:
+- `progress.md` — chronological log of changes
+- `metrics.json` — current performance scores
+- Notifies Robin if significant improvements made
 
 ## Rules
 

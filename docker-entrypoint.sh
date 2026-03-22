@@ -34,16 +34,13 @@ if [ "$(id -u)" = "0" ]; then
     
     # Build cron entries
     REMINDER_CRON="* * * * * cd /app && $ENV_VARS /usr/local/bin/python /app/scripts/reminder-daemon.py >> /tmp/reminder-daemon.log 2>&1"
-    # AutoImprove cron - runs analysis, Aisyah reviews via REVIEW_NEEDED.md
-    AUTOIMPROVE_CRON="0 1 * * * cd /app && $ENV_VARS WORKSPACE_PATH=/workspace /usr/local/bin/python /app/research/autoimprove.py run >> /tmp/autoimprove.log 2>&1"
+    # NOTE: AutoImprove is run by Aisyah (OpenClaw), not Docker cron
     
     # Install cron (remove old entries first if exist, then add new)
     EXISTING=$(crontab -u clawlite -l 2>/dev/null | grep -v "reminder-daemon" | grep -v "autoimprove" || true)
     echo "${EXISTING}
-${REMINDER_CRON}
-${AUTOIMPROVE_CRON}" | crontab -u clawlite -
+${REMINDER_CRON}" | crontab -u clawlite -
     echo "✓ Reminder daemon cron installed"
-    echo "✓ AutoImprove cron installed (daily at 01:00)"
     
     service cron start || cron
     echo "✓ Cron daemon started"

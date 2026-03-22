@@ -7,17 +7,50 @@ in both production instance and dev repository.
 import logging
 import subprocess
 import re
+import os
+import yaml
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 
 logger = logging.getLogger('autoimprove.fixer.clawlite')
 
-# Paths
-PRODUCTION_WORKSPACE = "/home/robin/.clawlite/instances/general/workspace"
-DEV_REPO = "/home/robin/dev/clawlite"
-DEV_TEMPLATES = f"{DEV_REPO}/templates"
-CONTAINER_NAME = "clawlite-general"
+# Load paths from config
+RESEARCH_DIR = Path(__file__).parent.parent
+CONFIG_PATH = RESEARCH_DIR / "config.yaml"
+
+
+def load_fix_config() -> Dict[str, Any]:
+    """Load fix targets from config.yaml."""
+    if CONFIG_PATH.exists():
+        with open(CONFIG_PATH, 'r') as f:
+            config = yaml.safe_load(f)
+            return config.get('fix_targets', {})
+    return {}
+
+
+def get_production_workspace() -> str:
+    """Get production workspace path from config."""
+    config = load_fix_config()
+    return config.get('production', {}).get('workspace', '')
+
+
+def get_container_name() -> str:
+    """Get container name from config."""
+    config = load_fix_config()
+    return config.get('production', {}).get('container', '')
+
+
+def get_dev_repo() -> str:
+    """Get dev repo path from config."""
+    config = load_fix_config()
+    return config.get('dev', {}).get('repo', '')
+
+
+def get_dev_templates() -> str:
+    """Get dev templates path from config."""
+    config = load_fix_config()
+    return config.get('dev', {}).get('templates', '')
 
 
 def apply_to_production(file_path: str, content: str) -> bool:
@@ -30,7 +63,11 @@ def apply_to_production(file_path: str, content: str) -> bool:
     Returns:
         True if successful
     """
-    full_path = f"{PRODUCTION_WORKSPACE}/{file_path}"
+    container_name = get_container_name()
+    if not container_name:
+        logger.error("Container name not configured")
+        return False
+    
     container_path = f"/workspace/{file_path}"
     
     try:
@@ -40,7 +77,7 @@ def apply_to_production(file_path: str, content: str) -> bool:
         
         # Copy to container
         result = subprocess.run(
-            ["docker", "cp", temp_path, f"{CONTAINER_NAME}:{container_path}"],
+            ["docker", "cp", temp_path, f"{container_name}:{container_path}"],
             capture_output=True,
             text=True,
         )
@@ -67,10 +104,17 @@ def apply_to_dev(file_path: str, content: str, is_template: bool = True) -> bool
     Returns:
         True if successful
     """
+    dev_repo = get_dev_repo()
+    dev_templates = get_dev_templates()
+    
+    if not dev_repo:
+        logger.error("Dev repo path not configured")
+        return False
+    
     if is_template and not file_path.startswith("src/"):
-        full_path = Path(DEV_TEMPLATES) / file_path
+        full_path = Path(dev_templates) / file_path if dev_templates else Path(dev_repo) / "templates" / file_path
     else:
-        full_path = Path(DEV_REPO) / file_path
+        full_path = Path(dev_repo) / file_path
     
     try:
         full_path.parent.mkdir(parents=True, exist_ok=True)
@@ -94,14 +138,15 @@ def add_section_to_agents_md(section_title: str, section_content: str) -> Dict[s
     """
     result = {"success": False, "production": False, "dev": False}
     
-    # Read current AGENTS.md from production
-    prod_path = Path(PRODUCTION_WORKSPACE) / "AGENTS.md"
-    dev_path = Path(DEV_TEMPLATES) / "AGENTS.md"
+    container_name = get_container_name()
+    if not container_name:
+        logger.error("Container name not configured")
+        return result
     
     try:
         # Read from production
         proc = subprocess.run(
-            ["docker", "exec", CONTAINER_NAME, "cat", "/workspace/AGENTS.md"],
+            ["docker", "exec", container_name, "cat", "/workspace/AGENTS.md"],
             capture_output=True,
             text=True,
         )
@@ -160,7 +205,12 @@ def update_agent_py_constant(constant_name: str, new_value: Any) -> Dict[str, An
     """
     result = {"success": False, "dev": False}
     
-    agent_path = Path(DEV_REPO) / "src" / "agent.py"
+    dev_repo = get_dev_repo()
+    if not dev_repo:
+        logger.error("Dev repo path not configured")
+        return result
+    
+    agent_path = Path(dev_repo) / "src" / "agent.py"
     
     try:
         content = agent_path.read_text()
@@ -197,7 +247,12 @@ def add_thinking_pattern(pattern: str) -> Dict[str, Any]:
     """
     result = {"success": False, "dev": False}
     
-    agent_path = Path(DEV_REPO) / "src" / "agent.py"
+    dev_repo = get_dev_repo()
+    if not dev_repo:
+        logger.error("Dev repo path not configured")
+        return result
+    
+    agent_path = Path(dev_repo) / "src" / "agent.py"
     
     try:
         content = agent_path.read_text()
@@ -246,11 +301,16 @@ def git_commit_and_push(message: str) -> bool:
     Returns:
         True if successful
     """
+    dev_repo = get_dev_repo()
+    if not dev_repo:
+        logger.error("Dev repo path not configured")
+        return False
+    
     try:
         # Stage all changes
         subprocess.run(
             ["git", "add", "."],
-            cwd=DEV_REPO,
+            cwd=dev_repo,
             check=True,
             capture_output=True,
         )
@@ -258,7 +318,7 @@ def git_commit_and_push(message: str) -> bool:
         # Commit
         result = subprocess.run(
             ["git", "commit", "-m", f"autoimprove: {message}"],
-            cwd=DEV_REPO,
+            cwd=dev_repo,
             capture_output=True,
             text=True,
         )
@@ -273,7 +333,7 @@ def git_commit_and_push(message: str) -> bool:
         # Push
         result = subprocess.run(
             ["git", "push", "origin", "main"],
-            cwd=DEV_REPO,
+            cwd=dev_repo,
             capture_output=True,
             text=True,
         )

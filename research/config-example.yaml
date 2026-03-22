@@ -57,3 +57,16 @@ git:
 cron:
   schedule: "0 1 * * *"  # Daily at 01:00 WIB
   timezone: "Asia/Jakarta"
+
+# Fix targets - where to apply fixes (configure for your setup)
+fix_targets:
+  # Production instance (immediate effect)
+  production:
+    workspace: ""  # e.g., /path/to/.clawlite/instances/general/workspace
+    container: ""  # e.g., clawlite-general
+  # Dev repository (for future instances)
+  dev:
+    repo: ""       # e.g., /path/to/clawlite
+    templates: ""  # e.g., /path/to/clawlite/templates
+    src: ""        # e.g., /path/to/clawlite/src
+    prompts: ""    # e.g., /path/to/clawlite/prompts

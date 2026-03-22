@@ -603,9 +603,9 @@ class TelegramChannel(BaseChannel):
             # Generate image description for context persistence
             description = await describe_image_for_context(image_base64)
             if description:
-                file_context = f"[User sent an image: {description}. Image saved at: {relative_path}]"
+                file_context = f"[User sent an image: {description}. IMAGE IS ALREADY VISIBLE - do not call analyze_image. Saved at: {relative_path}]"
             else:
-                file_context = f"[User sent an image which is now visible to you. Image saved at: {relative_path}]"
+                file_context = f"[User sent an image which is now visible to you. Do not call analyze_image. Saved at: {relative_path}]"
             
             await self._handle_message(update, context, file_context=file_context, images=[image_base64])
             
@@ -648,9 +648,9 @@ class TelegramChannel(BaseChannel):
                 # Generate image description for context persistence
                 description = await describe_image_for_context(image_base64)
                 if description:
-                    file_context = f"[User sent an image file: {description}. Image saved at: {relative_path}]"
+                    file_context = f"[User sent an image file: {description}. IMAGE IS ALREADY VISIBLE - do not call analyze_image. Saved at: {relative_path}]"
                 else:
-                    file_context = f"[User sent an image file which is now visible to you. Image saved at: {relative_path}]"
+                    file_context = f"[User sent an image file which is now visible to you. Do not call analyze_image. Saved at: {relative_path}]"
             else:
                 file_context = (
                     f"[User sent a file: {relative_path}]\n"

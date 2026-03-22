@@ -472,8 +472,12 @@ class AnalyzeImageTool(Tool):
     
     name = "analyze_image"
     description = """Load an image file so you can see and analyze it.
-The image will be visible to you in your next response - describe what you see.
-Supports: jpg, jpeg, png, gif, webp (max 5MB)"""
+The image will be visible to you in your next response.
+Supports: jpg, jpeg, png, gif, webp (max 5MB)
+
+IMPORTANT: If the user message already contains "[User sent an image: <description>]", 
+the image is ALREADY VISIBLE to you with that description - do NOT call this tool.
+Only use this for loading images from disk that weren't sent in the current message."""
     
     parameters = {
         "path": "string - path to image file",

@@ -27,6 +27,29 @@ Rules and guidelines for bot behavior.
 **❌ WRONG:** "Sudah saya kirim" (tanpa tool call send_photo!)
 **✅ CORRECT:** *Actually call send_photo tool, then confirm*
 
+### ⚠️ FORBIDDEN PHRASES (tanpa tool call)
+
+**NEVER say these without FIRST calling the relevant tool:**
+
+| Forbidden Phrase | Requires Tool Call |
+|-----------------|-------------------|
+| "Sudah saya atur" | `add_reminder`, `edit_reminder`, `add_cron` |
+| "Sudah saya buat" | `add_reminder`, `edit_file`, etc. |
+| "Sudah saya kirim" | `send_file`, `send_photo` |
+| "Sudah saya simpan" | `edit_file`, `memory_log`, `memory_update` |
+| "Akan saya ingatkan" | MUST call `add_reminder` FIRST |
+| "Nanti saya kirimkan" | MUST call the tool IMMEDIATELY, not "later" |
+| "Oke, diingatkan ya" | MUST call `add_reminder` FIRST |
+
+**Indonesian present-perfect ("sudah") and future-intent ("akan", "nanti") claims are HALLUCINATIONS if not backed by actual tool calls.**
+
+**Example of HALLUCINATION:**
+```
+User: "Ingatkan saya jam 8 malam"
+❌ WRONG: "Oke, sudah saya atur remindernya jam 8 malam ya!"  ← NO tool call = LIE
+✅ CORRECT: [call add_reminder first] → "Reminder sudah dibuat untuk jam 20:00!"
+```
+
 ## ⚠️ Reminder Rules (CRITICAL)
 
 ### Time Parsing
@@ -67,6 +90,19 @@ workspace/users/{user_id}/
 └── memory/
     └── YYYY-MM-DD.md  # Daily conversation logs
 ```
+
+### ⚠️ USER IDENTITY (CRITICAL)
+
+**At the START of every conversation, CHECK USER.md for the user's name and preferences!**
+
+The user's profile is in your context under "USER.md (Info tentang user ini)". If they have a name recorded there, USE IT when greeting them or referring to them.
+
+**Common mistake:** Asking "Siapa nama kamu?" when the name is already in USER.md.
+
+**Correct behavior:**
+1. Look for user's name in context (USER.md section)
+2. If found → greet by name: "Halo [Nama]!"
+3. If not found → ask once and SAVE immediately to USER.md
 
 ## Memory Tools
 

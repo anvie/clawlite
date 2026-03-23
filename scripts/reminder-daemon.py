@@ -67,18 +67,20 @@ def save_reminders(reminders: list) -> bool:
         return False
 
 
+def get_python_path() -> str:
+    """Get the appropriate python path."""
+    venv_python = CLAWLITE_DIR / ".venv" / "bin" / "python"
+    if venv_python.exists():
+        return str(venv_python)
+    return sys.executable
+
+
 def send_message(user_id: str, message: str) -> bool:
     """Send message to user via ClawLite CLI."""
     import subprocess
     
     try:
-        # Use system python (works in both Docker and local dev)
-        venv_python = CLAWLITE_DIR / ".venv" / "bin" / "python"
-        if venv_python.exists():
-            python_path = str(venv_python)
-        else:
-            # Docker or system install - use sys.executable
-            python_path = sys.executable
+        python_path = get_python_path()
         
         result = subprocess.run(
             [python_path, "-m", "src.cli.send", "-u", user_id, "-m", message],
@@ -100,6 +102,47 @@ def send_message(user_id: str, message: str) -> bool:
         return False
     except Exception as e:
         logger.error(f"Send error: {e}")
+        return False
+
+
+def send_file(user_id: str, file_path: str, caption: str = "") -> bool:
+    """Send file to user via ClawLite CLI."""
+    import subprocess
+    
+    try:
+        python_path = get_python_path()
+        workspace = get_workspace_dir()
+        
+        # Resolve file path relative to workspace
+        full_path = workspace / file_path
+        if not full_path.exists():
+            logger.error(f"Attachment not found: {full_path}")
+            return False
+        
+        args = [python_path, "-m", "src.cli.send", "-u", user_id, "-f", str(full_path)]
+        if caption:
+            args.extend(["-c", caption])
+        
+        result = subprocess.run(
+            args,
+            cwd=str(CLAWLITE_DIR),
+            capture_output=True,
+            text=True,
+            timeout=60  # Longer timeout for file uploads
+        )
+        
+        if result.returncode == 0:
+            logger.info(f"Sent file to {user_id}: {file_path}")
+            return True
+        else:
+            logger.error(f"Failed to send file: {result.stderr}")
+            return False
+            
+    except subprocess.TimeoutExpired:
+        logger.error("Send file command timed out")
+        return False
+    except Exception as e:
+        logger.error(f"Send file error: {e}")
         return False
 
 
@@ -195,14 +238,25 @@ def process_reminders():
             user_id = r.get("user_id")
             message = r.get("message", "Reminder!")
             label = r.get("label", "")
+            attachment = r.get("attachment")
             
             # Add label prefix if exists
             full_message = f"🔔 {label}: {message}" if label else f"🔔 {message}"
             
             if user_id:
-                success = send_message(user_id, full_message)
-                if success:
-                    logger.info(f"Fired reminder: {r.get('id')} - {label}")
+                # Send message first
+                msg_success = send_message(user_id, full_message)
+                
+                # Send attachment if exists
+                file_success = True
+                if attachment:
+                    file_success = send_file(user_id, attachment)
+                    if not file_success:
+                        logger.warning(f"Failed to send attachment for reminder {r.get('id')}")
+                
+                if msg_success:
+                    logger.info(f"Fired reminder: {r.get('id')} - {label}" + 
+                               (f" (with attachment: {attachment})" if attachment else ""))
                     r["last_fired"] = now.isoformat()
                     updated = True
         

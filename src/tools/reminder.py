@@ -163,10 +163,11 @@ def parse_time_input(text: str) -> tuple[Optional[datetime], Optional[str], str]
 def format_reminder(r: Dict[str, Any], idx: int = None) -> str:
     """Format a reminder for display."""
     prefix = f"[{idx}] " if idx is not None else ""
+    attachment_suffix = " 📎" if r.get("attachment") else ""
     
     if r.get("type") == "recurring":
         schedule = r.get("schedule", "?")
-        return f"{prefix}🔄 {r.get('label', 'Unnamed')} | Schedule: {schedule} | {r.get('message', '')[:50]}"
+        return f"{prefix}🔄 {r.get('label', 'Unnamed')} | Schedule: {schedule} | {r.get('message', '')[:50]}{attachment_suffix}"
     else:
         fire_at = r.get("fire_at", "?")
         if isinstance(fire_at, str):
@@ -176,7 +177,7 @@ def format_reminder(r: Dict[str, Any], idx: int = None) -> str:
                 fire_at = dt.strftime("%Y-%m-%d %H:%M")
             except:
                 pass
-        return f"{prefix}⏰ {r.get('label', 'Unnamed')} | Fire: {fire_at} | {r.get('message', '')[:50]}"
+        return f"{prefix}⏰ {r.get('label', 'Unnamed')} | Fire: {fire_at} | {r.get('message', '')[:50]}{attachment_suffix}"
 
 
 class AddReminderTool(Tool):
@@ -187,16 +188,22 @@ class AddReminderTool(Tool):
     - Relative: "5 menit", "1 jam", "30 detik", "2 hari"
     - Absolute: "14:30", "2026-03-17 14:30"
     - Recurring (cron): "30 4 * * *" (daily at 04:30)
+    
+    Attachments:
+    - Optional file path to send along with the reminder message
+    - Path should be relative to /workspace (e.g., "photos/sunset.jpg")
     """
     name = "add_reminder"
     description = (
         "Create a reminder. Supports one-time (relative/absolute time) and recurring (cron). "
+        "Optional attachment to send with reminder. "
         "Examples: '5 menit', '1 jam', '14:30', '30 4 * * *' for daily 04:30"
     )
     parameters = {
         "time": "string - when to fire: '5 menit', '1 jam', '14:30', or cron '30 4 * * *'",
         "message": "string - reminder message",
-        "label": "string - optional label for easy reference"
+        "label": "string - optional label for easy reference",
+        "attachment": "string - optional file path (relative to /workspace) to send with reminder"
     }
     
     async def execute(
@@ -204,6 +211,7 @@ class AddReminderTool(Tool):
         time: str = "",
         message: str = "",
         label: str = "",
+        attachment: str = "",
         **kwargs
     ) -> ToolResult:
         if not time or not message:
@@ -223,6 +231,15 @@ class AddReminderTool(Tool):
                 f"Could not parse time '{time}'. Use: '5 menit', '1 jam', '14:30', or cron '30 4 * * *'"
             )
         
+        # Validate attachment if provided
+        if attachment:
+            attachment_path = Path(WORKSPACE) / attachment
+            if not attachment_path.exists():
+                return ToolResult(
+                    False, "",
+                    f"Attachment file not found: {attachment}. Make sure the file exists in /workspace."
+                )
+        
         # Generate ID and label
         reminder_id = str(uuid.uuid4())[:8]
         if not label:
@@ -238,6 +255,10 @@ class AddReminderTool(Tool):
             "created_at": datetime.now(DEFAULT_TZ).isoformat(),
             "active": True,
         }
+        
+        # Add attachment if provided
+        if attachment:
+            reminder["attachment"] = attachment
         
         if reminder_type == "once":
             reminder["fire_at"] = fire_at.isoformat()
@@ -255,8 +276,7 @@ class AddReminderTool(Tool):
         
         logger.info(f"Created reminder {reminder_id} for {user_id}: {message[:30]}...")
         
-        return ToolResult(
-            True,
+        result_msg = (
             f"✅ Reminder created!\n"
             f"ID: {reminder_id}\n"
             f"Type: {reminder_type}\n"
@@ -264,6 +284,10 @@ class AddReminderTool(Tool):
             f"Message: {message}\n"
             f"Label: {label}"
         )
+        if attachment:
+            result_msg += f"\nAttachment: {attachment}"
+        
+        return ToolResult(True, result_msg)
 
 
 class ListRemindersTool(Tool):

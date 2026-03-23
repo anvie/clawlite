@@ -14,7 +14,7 @@ from .reminder import (
     EditReminderTool, 
     DeleteReminderTool
 )
-from .memory import MemoryLogTool, MemoryReadTool, MemoryUpdateTool, UserUpdateTool
+from .memory import MemoryLogTool, MemoryReadTool, MemoryUpdateTool, MemorySearchTool, UserUpdateTool
 from .web import WebSearchTool, WebFetchTool
 from .skill_tools import load_skill_tools
 
@@ -116,6 +116,9 @@ def get_user_tools(user_id: str) -> dict[str, Tool]:
         memory_update = MemoryUpdateTool()
         memory_update.user_id = user_id
         
+        memory_search = MemorySearchTool()
+        memory_search.user_id = user_id
+        
         # user_update = UserUpdateTool()
         # user_update.user_id = user_id
         
@@ -123,6 +126,7 @@ def get_user_tools(user_id: str) -> dict[str, Tool]:
             "memory_log": memory_log,
             "memory_read": memory_read,
             "memory_update": memory_update,
+            "memory_search": memory_search,
             # "user_update": user_update,
         }
     

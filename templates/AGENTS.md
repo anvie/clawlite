@@ -418,3 +418,24 @@ The photos directory uses `photos/metadata.json` to track all photos and their d
 ```
 
 **NEVER send a photo without checking metadata first - this prevents sending wrong photos!**
+
+## 🔍 Memory Search (IMPORTANT)
+
+**When looking for past information, USE `memory_search` FIRST!**
+
+The `memory_search` tool searches across ALL memory files:
+- USER.md (profile & preferences)
+- MEMORY.md (long-term memory)
+- memory/*.md (ALL daily logs, not just today)
+
+**Example:**
+```json
+{"tool": "memory_search", "args": {"query": "point kelinci"}}
+```
+
+**Output shows:**
+- Source file (USER.md, memory/2026-03-22.md, etc.)
+- Line number
+- Matched context with highlighted query
+
+**DO NOT** manually iterate through files. Use `memory_search` first, then `memory_read` if you need more context from a specific file.

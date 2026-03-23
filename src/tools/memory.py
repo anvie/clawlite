@@ -1,9 +1,10 @@
 """User-scoped memory tools."""
 
 import os
+import re
 from datetime import date
 from pathlib import Path
-from typing import Optional
+from typing import Optional, List, Tuple
 
 from . import Tool, ToolResult
 
@@ -228,10 +229,136 @@ class UserUpdateTool(Tool):
             return ToolResult(success=False, error=str(e))
 
 
+class MemorySearchTool(Tool):
+    """Search across all user memory files."""
+    
+    name = "memory_search"
+    description = """Search for information across ALL user memory files:
+- USER.md (user profile & preferences)
+- MEMORY.md (long-term memory)
+- memory/*.md (all daily logs)
+
+Use this when looking for past information, events, or data that might be stored anywhere in memory."""
+    parameters = {
+        "query": {
+            "type": "string",
+            "description": "Search query (case-insensitive). Can be a word, phrase, or simple pattern.",
+            "required": True
+        },
+        "limit": {
+            "type": "integer",
+            "description": "Maximum number of results to return (default: 10)",
+            "required": False
+        }
+    }
+    
+    user_id: Optional[str] = None
+    
+    def _search_file(self, path: Path, query: str) -> List[Tuple[str, str, int]]:
+        """Search a single file for query matches.
+        
+        Returns list of (source, matched_line, line_number) tuples.
+        """
+        results = []
+        try:
+            if not path.exists():
+                return results
+            
+            content = path.read_text()
+            lines = content.split('\n')
+            query_lower = query.lower()
+            
+            for i, line in enumerate(lines, 1):
+                if query_lower in line.lower():
+                    # Get context: include surrounding lines
+                    start = max(0, i - 2)
+                    end = min(len(lines), i + 1)
+                    context_lines = lines[start:end]
+                    context = '\n'.join(context_lines).strip()
+                    
+                    source = path.name
+                    if path.parent.name == "memory":
+                        source = f"memory/{path.name}"
+                    
+                    results.append((source, context, i))
+        except Exception:
+            pass
+        
+        return results
+    
+    async def execute(self, query: str = "", limit: int = 10) -> ToolResult:
+        if not self.user_id:
+            return ToolResult(success=False, error="User ID not set")
+        
+        if not query or len(query.strip()) < 2:
+            return ToolResult(success=False, error="Query must be at least 2 characters")
+        
+        query = query.strip()
+        
+        try:
+            user_dir = get_user_dir(self.user_id)
+            all_results: List[Tuple[str, str, int]] = []
+            
+            # Search USER.md
+            user_file = user_dir / "USER.md"
+            all_results.extend(self._search_file(user_file, query))
+            
+            # Search MEMORY.md
+            memory_file = user_dir / "MEMORY.md"
+            all_results.extend(self._search_file(memory_file, query))
+            
+            # Search all daily logs (sorted by date, newest first)
+            memory_dir = user_dir / "memory"
+            if memory_dir.exists():
+                daily_files = sorted(memory_dir.glob("*.md"), reverse=True)
+                for daily_file in daily_files:
+                    all_results.extend(self._search_file(daily_file, query))
+            
+            if not all_results:
+                return ToolResult(
+                    success=True,
+                    output=f"No matches found for '{query}' in any memory files."
+                )
+            
+            # Deduplicate similar results (same file, overlapping context)
+            seen_contexts = set()
+            unique_results = []
+            for source, context, line_num in all_results:
+                # Use first 50 chars of context as dedup key
+                key = (source, context[:50])
+                if key not in seen_contexts:
+                    seen_contexts.add(key)
+                    unique_results.append((source, context, line_num))
+            
+            # Limit results
+            unique_results = unique_results[:limit]
+            
+            # Format output
+            output_lines = [f"🔍 Found {len(unique_results)} match(es) for '{query}':\n"]
+            
+            for i, (source, context, line_num) in enumerate(unique_results, 1):
+                # Highlight the query in context
+                highlighted = re.sub(
+                    f'({re.escape(query)})',
+                    r'**\1**',
+                    context,
+                    flags=re.IGNORECASE
+                )
+                output_lines.append(f"[{i}] {source} (line {line_num}):")
+                output_lines.append(f"    {highlighted}")
+                output_lines.append("")
+            
+            return ToolResult(success=True, output='\n'.join(output_lines))
+            
+        except Exception as e:
+            return ToolResult(success=False, error=str(e))
+
+
 # Export tools
 MEMORY_TOOLS = [
     MemoryLogTool(),
     MemoryReadTool(),
     MemoryUpdateTool(),
+    MemorySearchTool(),
     # UserUpdateTool(),
 ]

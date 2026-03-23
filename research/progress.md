@@ -5,6 +5,47 @@ This file tracks all improvement cycles chronologically. Each entry documents an
 ---
 
 <!-- New entries will be prepended below this line -->
+## 2026-03-24 01:10 WIB
+**Cycle:** #10b — Auto-Fix by Aisyah
+**Status:** ✅ All fixes applied
+
+**Fixes Applied:**
+
+### 1. Anti-Hallucination Expansion (AGENTS.md)
+Added **FORBIDDEN PHRASES** table to catch Indonesian present-perfect/future-intent claims:
+
+| Forbidden Phrase | Requires Tool Call |
+|-----------------|-------------------|
+| "Sudah saya atur" | `add_reminder`, `edit_reminder`, `add_cron` |
+| "Sudah saya buat" | `add_reminder`, `edit_file`, etc. |
+| "Sudah saya kirim" | `send_file`, `send_photo` |
+| "Akan saya ingatkan" | MUST call `add_reminder` FIRST |
+| "Nanti saya kirimkan" | MUST call the tool IMMEDIATELY |
+
+**Root cause:** Existing rules caught "Sudah kirim" but missed "Sudah atur" / "Akan kirim" patterns.
+
+### 2. Reminder Attachment Support (Feature)
+- `add_reminder` now accepts optional `attachment` parameter
+- Validates file exists before creating reminder
+- `reminder-daemon.py` sends file along with message when attachment present
+- `send.py` CLI updated to support file sending via Telegram (`-f` flag)
+
+**Root cause:** User wanted "kirim foto NANTI barengan sama reminder" but reminders had no attachment support.
+
+### 3. User Identity Rule (AGENTS.md)
+Added explicit instruction:
+> At the START of every conversation, CHECK USER.md for the user's name and preferences!
+
+**Root cause:** Agent asked "Siapa nama kamu?" when name was already in USER.md.
+
+**Deployment:**
+- ✅ Applied to `clawlite-general` container via docker cp
+- ✅ Committed to git: `0e4f258`
+
+**Files changed:** 5 files, +224/-28 lines
+
+---
+
 ## 2026-03-24 01:00 WIB
 **Cycle:** #10 — Analysis + Aisyah Review
 **Conversations analyzed:** 1 (13 exchanges)

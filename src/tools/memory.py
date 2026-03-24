@@ -258,6 +258,7 @@ Use this when looking for past information, events, or data that might be stored
         """Search a single file for query matches.
         
         Returns list of (source, matched_line, line_number) tuples.
+        Supports multi-word queries: all words must be present (AND logic).
         """
         results = []
         try:
@@ -266,10 +267,16 @@ Use this when looking for past information, events, or data that might be stored
             
             content = path.read_text()
             lines = content.split('\n')
-            query_lower = query.lower()
+            
+            # Split query into words for multi-word search
+            query_words = [w.lower() for w in query.split() if len(w) >= 2]
+            if not query_words:
+                query_words = [query.lower()]
             
             for i, line in enumerate(lines, 1):
-                if query_lower in line.lower():
+                line_lower = line.lower()
+                # All query words must be present in the line (AND logic)
+                if all(word in line_lower for word in query_words):
                     # Get context: include surrounding lines
                     start = max(0, i - 2)
                     end = min(len(lines), i + 1)

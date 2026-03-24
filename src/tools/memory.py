@@ -3,8 +3,9 @@
 import os
 import re
 from datetime import date
+from difflib import SequenceMatcher
 from pathlib import Path
-from typing import Optional, List, Tuple
+from typing import Optional, List, Tuple, Dict
 
 from . import Tool, ToolResult
 
@@ -254,11 +255,11 @@ Use this when looking for past information, events, or data that might be stored
     
     user_id: Optional[str] = None
     
-    def _search_file(self, path: Path, query: str) -> List[Tuple[str, str, int]]:
+    def _search_file(self, path: Path, query: str) -> List[Dict]:
         """Search a single file for query matches.
         
-        Returns list of (source, matched_line, line_number) tuples.
-        Supports multi-word queries: all words must be present (AND logic).
+        Returns list of dicts with source, context, line_number, and confidence.
+        Supports multi-word queries with fuzzy matching.
         """
         results = []
         try:
@@ -275,8 +276,37 @@ Use this when looking for past information, events, or data that might be stored
             
             for i, line in enumerate(lines, 1):
                 line_lower = line.lower()
-                # All query words must be present in the line (AND logic)
+                confidence = 0.0
+                is_match = False
+                
+                # First try exact match (all query words present)
                 if all(word in line_lower for word in query_words):
+                    is_match = True
+                    confidence = 1.0
+                else:
+                    # Try fuzzy matching for each query word
+                    best_word_score = 0.0
+                    matched_words = 0
+                    
+                    for qword in query_words:
+                        # Check against line words
+                        line_words = line_lower.split()
+                        for lword in line_words:
+                            if len(qword) >= 3 and len(lword) >= 3:
+                                similarity = SequenceMatcher(None, qword, lword).ratio()
+                                if similarity > best_word_score:
+                                    best_word_score = similarity
+                                if similarity >= 0.6:  # Fuzzy threshold
+                                    matched_words += 1
+                    
+                    # Consider it a match if enough words fuzzy-match
+                    if len(query_words) > 0:
+                        match_ratio = matched_words / len(query_words)
+                        if match_ratio >= 0.5:  # At least 50% of words match
+                            is_match = True
+                            confidence = match_ratio * best_word_score
+                
+                if is_match:
                     # Get context: include surrounding lines
                     start = max(0, i - 2)
                     end = min(len(lines), i + 1)
@@ -287,7 +317,12 @@ Use this when looking for past information, events, or data that might be stored
                     if path.parent.name == "memory":
                         source = f"memory/{path.name}"
                     
-                    results.append((source, context, i))
+                    results.append({
+                        'source': source,
+                        'context': context,
+                        'line': i,
+                        'confidence': confidence
+                    })
         except Exception:
             pass
         
@@ -304,7 +339,7 @@ Use this when looking for past information, events, or data that might be stored
         
         try:
             user_dir = get_user_dir(self.user_id)
-            all_results: List[Tuple[str, str, int]] = []
+            all_results: List[Dict] = []
             
             # Search USER.md
             user_file = user_dir / "USER.md"
@@ -327,15 +362,18 @@ Use this when looking for past information, events, or data that might be stored
                     output=f"No matches found for '{query}' in any memory files."
                 )
             
+            # Sort by confidence (best matches first)
+            all_results.sort(key=lambda x: x['confidence'], reverse=True)
+            
             # Deduplicate similar results (same file, overlapping context)
             seen_contexts = set()
             unique_results = []
-            for source, context, line_num in all_results:
+            for result in all_results:
                 # Use first 50 chars of context as dedup key
-                key = (source, context[:50])
+                key = (result['source'], result['context'][:50])
                 if key not in seen_contexts:
                     seen_contexts.add(key)
-                    unique_results.append((source, context, line_num))
+                    unique_results.append(result)
             
             # Limit results
             unique_results = unique_results[:limit]
@@ -343,7 +381,20 @@ Use this when looking for past information, events, or data that might be stored
             # Format output
             output_lines = [f"🔍 Found {len(unique_results)} match(es) for '{query}':\n"]
             
-            for i, (source, context, line_num) in enumerate(unique_results, 1):
+            for i, result in enumerate(unique_results, 1):
+                source = result['source']
+                context = result['context']
+                line_num = result['line']
+                confidence = result['confidence']
+                
+                # Show confidence indicator
+                if confidence >= 0.9:
+                    indicator = "🎯"  # Exact/high match
+                elif confidence >= 0.7:
+                    indicator = "✓"   # Good match
+                else:
+                    indicator = "~"   # Fuzzy match
+                
                 # Highlight the query in context
                 highlighted = re.sub(
                     f'({re.escape(query)})',
@@ -351,7 +402,7 @@ Use this when looking for past information, events, or data that might be stored
                     context,
                     flags=re.IGNORECASE
                 )
-                output_lines.append(f"[{i}] {source} (line {line_num}):")
+                output_lines.append(f"[{i}] {indicator} {source} (line {line_num}, confidence: {confidence:.2f}):")
                 output_lines.append(f"    {highlighted}")
                 output_lines.append("")
             

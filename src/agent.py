@@ -818,7 +818,7 @@ async def run_agent(
     executed_tool_calls = set()  # Track executed calls to prevent duplicates
     consecutive_same_tool = 0  # Track consecutive calls of same tool
     last_tool_name = None  # Last tool called
-    MAX_CONSECUTIVE_SAME_TOOL = 2  # Stop after this many consecutive same-tool calls (reduced from 3)
+    MAX_CONSECUTIVE_SAME_TOOL = 3  # Stop after this many consecutive same-tool calls
     file_moves = {}  # Track file movements: old_path -> new_path
     
     while iterations < max_iterations:

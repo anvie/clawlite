@@ -5,6 +5,67 @@ This file tracks all improvement cycles chronologically. Each entry documents an
 ---
 
 <!-- New entries will be prepended below this line -->
+## 2026-03-25 01:25 WIB
+**Cycle:** #19 — Manual Analysis + Critical Fixes Applied
+**Conversations analyzed:** 2 (convo-2026-03-25.jsonl: 7 exchanges, convo-2026-03-24.jsonl: 34 exchanges)
+**Issues detected:** 24
+- 📚 context_bloat: 6
+- 🔄 loop_behavior: 4
+- 👻 hallucination: 3 (CRITICAL - agent confused chocolate with rabbit food!)
+- ❌ server_error: 7
+- ✋ user_correction: 4
+- 🆕 LLM-discovered: 7 (inconsistent_memory_search_results, truncated_responses, contradictory_tool_limitation_claims, etc.)
+
+**Fixes Applied:**
+
+### 1. Enhanced Anti-Hallucination Rules (CRITICAL)
+**Root cause:** Agent incorrectly identified a chocolate bar as "Oxbow Essentials Adult Rabbit Food" with made-up nutritional info (12% protein, etc.). User corrected: "Itu cokelat makanan manusia, bukan makanan kelinci".
+
+**Fix applied to:**
+- ✅ `prompts/system.md` - Added comprehensive ANTI-HALLUCINATION RULES section with:
+  - Image analysis protocol: "NEVER invent brand names, product names, or nutritional information"
+  - Explicit table of forbidden claims without evidence
+  - Truthfulness principles: "Admit uncertainty", "Say tidak tahu rather than making things up"
+  - Specific example of the chocolate/pakan confusion
+
+- ✅ `templates/AGENTS.md` - Enhanced Anti-Hallucination section with:
+  - Image analysis rules: "NEVER confuse similar items (cokelat ≠ pakan kelinci!)"
+  - Concrete example of the critical hallucination from this conversation
+  - Instructions for responding to corrections: "IMMEDIATELY apologize", "Thank them", "Don't defend"
+
+**Deployment:**
+- ✅ Applied to production: `docker cp prompts/system.md clawlite-general:/workspace/system.md`
+- ✅ Applied to production: `docker cp templates/AGENTS.md clawlite-general:/workspace/AGENTS.md`
+- ✅ Updated dev template for future instances
+
+### 2. Tool Usage Best Practices Added
+- Added section on avoiding redundant tool calls
+- "Read once, use multiple times" principle
+- Maximum 2 consecutive same-tool calls guideline
+
+**Status:** ✅ Fixes deployed to production
+
+**Current Metrics:**
+| Metric | Value | Target | Status |
+|--------|-------|--------|--------|
+| hallucination_rate | 7.3% | 0% | ⚠️ Critical |
+| server_error_rate | 17.1% | 2% | ⚠️ High |
+| user_correction_rate | 9.8% | 5% | ⚠️ High |
+| loop_rate | 9.8% | 0% | ⚠️ Needs work |
+| context_bloat_rate | 14.6% | 5% | ⚠️ Needs work |
+
+**Notes:**
+- LLM analysis discovered 7 new issue types but quality score was only 4/10
+- Server errors (17%) are likely infrastructure issues, not prompt-related
+- Context bloat and loop behavior need agent.py code fixes, not just prompt changes
+- Next cycle should focus on: memory_search caching, file read deduplication
+
+**Files changed:**
+- `prompts/system.md`: +62 lines (anti-hallucination section)
+- `templates/AGENTS.md`: +38 lines (enhanced anti-hallucination rules)
+
+---
+
 ## 2026-03-24 22:09 WIB
 **Cycle:** #18 — Analysis Only (Awaiting Aisyah Review)
 **Conversations analyzed:** 2

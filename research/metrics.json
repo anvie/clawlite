@@ -2,11 +2,8 @@
   "version": 1,
   "last_updated": null,
   "last_processed": {
-    "timestamp": "2026-03-24T22:14:50.772600",
-    "files": [
-      "01b570c7df33",
-      "6b6f3ad5ec51"
-    ]
+    "timestamp": "2026-03-25T01:09:28.677508",
+    "files": []
   },
   "baseline": {
     "response_quality": null,

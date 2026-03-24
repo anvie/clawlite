@@ -1,7 +1,0 @@
-{
-  "tool": "hello_tool",
-  "description": "Prints a hello world message with a name",
-  "args": {
-    "name": "string"
-  }
-}

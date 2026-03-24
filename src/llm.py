@@ -50,6 +50,11 @@ def get_llm_timeout() -> int:
     return int(_get_config("llm.timeout", 60))
 
 
+def is_vision_enabled() -> bool:
+    """Check if vision/image support is enabled for current LLM."""
+    return bool(_get_config("llm.vision", True))  # Default True for backward compat
+
+
 def get_anthropic_extended_thinking() -> bool:
     """Get Anthropic extended thinking setting from config."""
     return bool(_get_config("llm.extended_thinking", True))
@@ -816,11 +821,35 @@ async def stream_generate(
     system: str = "",
     temperature: float = 0.3,
     images: list[str] = None,
+    max_retries: int = 2,
 ) -> AsyncGenerator[Tuple[str, bool, Optional[str]], None]:
-    """Stream response from configured LLM provider."""
+    """Stream response from configured LLM provider with retry logic."""
     provider = _get_provider()
-    async for item in provider.stream_generate(prompt, system, temperature, images):
-        yield item
+    last_error = None
+    
+    # Skip images if vision is disabled
+    if images and not is_vision_enabled():
+        logger.info("Vision disabled in config, skipping image data")
+        images = None
+    
+    for attempt in range(max_retries + 1):
+        try:
+            async for item in provider.stream_generate(prompt, system, temperature, images):
+                yield item
+            return  # Success, exit
+        except (httpx.ConnectError, httpx.ReadTimeout, ConnectionError) as e:
+            last_error = e
+            if attempt < max_retries:
+                wait_time = 2 ** attempt  # Exponential backoff: 1s, 2s
+                logger.warning(f"LLM connection error (attempt {attempt + 1}/{max_retries + 1}), retrying in {wait_time}s: {e}")
+                await asyncio.sleep(wait_time)
+            else:
+                logger.error(f"LLM connection failed after {max_retries + 1} attempts: {e}")
+                raise
+        except Exception as e:
+            # For other errors, don't retry
+            logger.error(f"LLM error (not retrying): {e}")
+            raise
 
 
 async def generate(
@@ -845,11 +874,30 @@ async def stream_with_tools(
     system: str = "",
     tools: List[Dict[str, Any]] = None,
     temperature: float = 0.3,
+    max_retries: int = 2,
 ) -> AsyncGenerator[Dict[str, Any], None]:
-    """Stream response with native tool support (if available)."""
+    """Stream response with native tool support (if available), with retry logic."""
     provider = _get_provider()
-    async for item in provider.stream_with_tools(messages, system, tools, temperature):
-        yield item
+    last_error = None
+    
+    for attempt in range(max_retries + 1):
+        try:
+            async for item in provider.stream_with_tools(messages, system, tools, temperature):
+                yield item
+            return  # Success, exit
+        except (httpx.ConnectError, httpx.ReadTimeout, ConnectionError) as e:
+            last_error = e
+            if attempt < max_retries:
+                wait_time = 2 ** attempt  # Exponential backoff: 1s, 2s
+                logger.warning(f"LLM connection error (attempt {attempt + 1}/{max_retries + 1}), retrying in {wait_time}s: {e}")
+                await asyncio.sleep(wait_time)
+            else:
+                logger.error(f"LLM connection failed after {max_retries + 1} attempts: {e}")
+                raise
+        except Exception as e:
+            # For other errors, don't retry
+            logger.error(f"LLM error (not retrying): {e}")
+            raise
 
 
 def convert_tools_to_anthropic_format(tools: List[Dict[str, Any]]) -> List[Dict[str, Any]]:

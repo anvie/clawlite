@@ -28,8 +28,10 @@ PROJECT_ROOT = RESEARCH_DIR.parent
 sys.path.insert(0, str(RESEARCH_DIR))
 
 from analyzer import load_conversations, analyze_conversations, Issue
+from analyzer.llm_analyzer import analyze_with_llm, LLMAnalyzer
 from tester import generate_test_case, TestCase, run_tests, load_test_cases, save_test_cases, run_tests_from_dir
 from fixer import propose_fix, apply_fix, apply_fixes, FixProposal
+from fixer.llm_proposer import propose_fix_with_llm, save_proposals_to_backlog
 
 # Configure logging
 logging.basicConfig(
@@ -256,9 +258,37 @@ def cmd_analyze(args) -> Dict[str, Any]:
         logger.info("No new conversations to analyze")
         return {'conversations': 0, 'issues': 0, 'new_file_hashes': []}
     
-    # Analyze
+    # Pattern-based analysis (fast, known issues)
     results = analyze_conversations(conversations)
     results['new_file_hashes'] = new_file_hashes
+    
+    # LLM-powered analysis (discovers new issues)
+    llm_config = config.get('llm_analysis', {})
+    if llm_config.get('enabled', False):
+        logger.info("Running LLM-powered analysis to discover new issue types...")
+        try:
+            llm_issues = analyze_with_llm(conversations, config)
+            
+            # Merge LLM-discovered issues (avoid duplicates)
+            existing_descriptions = {i.description for i in results['issues']}
+            new_llm_issues = []
+            for issue in llm_issues:
+                if issue.description not in existing_descriptions:
+                    new_llm_issues.append(issue)
+                    results['issues'].append(issue)
+                    results['issues_by_type'][issue.type] = results['issues_by_type'].get(issue.type, 0) + 1
+            
+            results['total_issues'] = len(results['issues'])
+            results['llm_discovered'] = len(new_llm_issues)
+            
+            if new_llm_issues:
+                logger.info(f"LLM discovered {len(new_llm_issues)} additional issues")
+                for issue in new_llm_issues:
+                    if issue.context.get('is_new_type'):
+                        logger.info(f"  🆕 New issue type: {issue.type}")
+        except Exception as e:
+            logger.warning(f"LLM analysis failed: {e}")
+            results['llm_discovered'] = 0
     
     logger.info(f"Found {results['total_issues']} issues in {results['conversations_analyzed']} NEW conversations")
     
@@ -432,6 +462,10 @@ def cmd_run(args) -> None:
     # 2. Generate fix proposals (but don't apply!)
     issues = analysis.get('issues', [])
     proposals = []
+    llm_proposals = []
+    
+    # Check if LLM proposer is enabled
+    use_llm_proposer = config.get('llm_analysis', {}).get('enabled', False)
     
     for issue in issues:
         # Create a fake result/test_case to propose a fix
@@ -448,14 +482,28 @@ def cmd_run(args) -> None:
             'user_message': issue.exchange.user_message,
         })()
         
+        # Try built-in proposer first
         proposal = propose_fix(fake_result, fake_tc, str(PROJECT_ROOT))
         if proposal:
             proposals.append(proposal)
-            # Add to backlog for Aisyah's review
             add_to_backlog(
                 idea=proposal.description,
                 reason=f"Issue type: {issue.type}, File: {proposal.file_path}",
             )
+        elif use_llm_proposer:
+            # Fallback to LLM proposer for unknown issue types
+            llm_proposal = propose_fix_with_llm(issue, config)
+            if llm_proposal:
+                llm_proposals.append(llm_proposal)
+                add_to_backlog(
+                    idea=f"[LLM] {llm_proposal.description}",
+                    reason=f"Issue type: {issue.type}, File: {llm_proposal.target_file}, Risk: {llm_proposal.risk_level}",
+                )
+    
+    # Save LLM proposals to backlog with details
+    if llm_proposals:
+        save_proposals_to_backlog(llm_proposals, RESEARCH_DIR / "ideas" / "llm_proposals.md")
+        logger.info(f"Generated {len(llm_proposals)} LLM fix proposals")
     
     # 3. Update progress with analysis results (no fixes applied)
     update_analysis_report(

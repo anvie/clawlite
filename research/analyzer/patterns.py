@@ -52,6 +52,18 @@ HALLUCINATION_PATTERNS: List[re.Pattern] = [
     re.compile(r'(sent|terkirim|kirim)', re.IGNORECASE),
 ]
 
+# Server error patterns - connection or processing failures
+SERVER_ERROR_PATTERNS: List[re.Pattern] = [
+    re.compile(r'Server sedang bermasalah', re.IGNORECASE),
+    re.compile(r'Tidak dapat terhubung', re.IGNORECASE),
+    re.compile(r'❌.*error', re.IGNORECASE),
+    re.compile(r'❌.*Coba lagi', re.IGNORECASE),
+    re.compile(r'Connection refused', re.IGNORECASE),
+    re.compile(r'timeout', re.IGNORECASE),
+    re.compile(r'tidak dapat memproses', re.IGNORECASE),
+    re.compile(r'gagal (memproses|terhubung)', re.IGNORECASE),
+]
+
 
 def get_issue_patterns() -> Dict[str, Any]:
     """Return all issue patterns with their metadata."""
@@ -97,6 +109,12 @@ def get_issue_patterns() -> Dict[str, Any]:
             'threshold_seconds': 30,
             'severity': 'medium',
             'fix_target': 'agent.py',
+        },
+        'server_error': {
+            'description': 'Server connection or processing errors',
+            'patterns': SERVER_ERROR_PATTERNS,
+            'severity': 'critical',
+            'fix_target': 'llm.py',
         },
     }
 

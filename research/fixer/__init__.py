@@ -5,6 +5,7 @@ Proposes and applies fixes based on test failures.
 
 from .proposer import propose_fix, FixProposal
 from .applier import apply_fix, apply_fixes
+from .llm_proposer import propose_fix_with_llm, LLMFixProposal, save_proposals_to_backlog
 from .clawlite_fixer import (
     apply_to_production,
     apply_to_dev,

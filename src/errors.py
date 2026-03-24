@@ -14,20 +14,20 @@ SENSITIVE_PATTERNS = [
     (r'/app/[^\s\'"]*', '[PATH]'),  # Container paths
 ]
 
-# User-friendly error messages
+# User-friendly error messages (more informative)
 ERROR_MESSAGES = {
-    "connection": "Tidak dapat terhubung ke server. Coba lagi nanti.",
-    "timeout": "Request terlalu lama. Coba lagi.",
-    "500": "Server sedang bermasalah. Coba lagi nanti.",
-    "502": "Server sedang bermasalah. Coba lagi nanti.",
-    "503": "Server sedang sibuk. Coba lagi nanti.",
-    "429": "Terlalu banyak request. Tunggu sebentar.",
+    "connection": "Tidak dapat terhubung ke server AI. Kemungkinan server sedang restart atau ada masalah jaringan.",
+    "timeout": "Request ke AI terlalu lama. Server mungkin sedang sibuk, coba lagi.",
+    "500": "Server AI sedang bermasalah (500). Tim sedang memperbaiki.",
+    "502": "Server AI tidak dapat dijangkau (502). Coba lagi dalam beberapa menit.",
+    "503": "Server AI sedang sibuk (503). Coba lagi dalam beberapa menit.",
+    "429": "Terlalu banyak request. Tunggu 30 detik lalu coba lagi.",
     "401": "Autentikasi gagal. Hubungi admin.",
     "403": "Akses ditolak.",
     "404": "Resource tidak ditemukan.",
-    "rate limit": "Terlalu banyak request. Tunggu sebentar.",
-    "model": "Terjadi kesalahan pada AI. Coba lagi.",
-    "default": "Terjadi kesalahan. Coba lagi nanti.",
+    "rate limit": "Rate limit tercapai. Tunggu 30 detik lalu coba lagi.",
+    "model": "AI model error. Coba kirim ulang pesan.",
+    "default": "Terjadi kesalahan. Coba kirim ulang pesan.",
 }
 
 

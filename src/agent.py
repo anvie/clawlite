@@ -16,6 +16,7 @@ from .llm import (
     convert_tools_to_anthropic_format,
     build_tool_result_message,
     ToolResult as LLMToolResult,
+    is_vision_enabled,
 )
 from .tools import get_tool, format_tools_for_prompt, list_tools, SKILL_TOOLS
 from .tool_parser import extract_tool_call, has_pending_tool_call
@@ -399,6 +400,11 @@ async def _run_agent_native_tools(
     
     # Add current user message (with images if provided)
     # Use processed_message (translated if enabled) for LLM
+    # Skip images if vision is disabled in config
+    if images and not is_vision_enabled():
+        logger.info("Vision disabled in config, skipping image data for native tools")
+        images = None
+    
     if images:
         content = []
         for img_base64 in images:
@@ -812,7 +818,7 @@ async def run_agent(
     executed_tool_calls = set()  # Track executed calls to prevent duplicates
     consecutive_same_tool = 0  # Track consecutive calls of same tool
     last_tool_name = None  # Last tool called
-    MAX_CONSECUTIVE_SAME_TOOL = 3  # Stop after this many consecutive same-tool calls (reduced from 4)
+    MAX_CONSECUTIVE_SAME_TOOL = 2  # Stop after this many consecutive same-tool calls (reduced from 3)
     file_moves = {}  # Track file movements: old_path -> new_path
     
     while iterations < max_iterations:

@@ -43,3 +43,6 @@ data/whatsapp/
 # Domain-specific skills (install separately)
 skills/krasan_invoice/
 research/ideas/backlog.md
+research/autoimprove-*.log
+research/ideas/llm_proposals.md
+research/config.yaml

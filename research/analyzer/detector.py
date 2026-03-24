@@ -15,6 +15,7 @@ from .patterns import (
     EMPTY_RESPONSE_PATTERNS,
     USER_CORRECTION_PATTERNS,
     HALLUCINATION_PATTERNS,
+    SERVER_ERROR_PATTERNS,
     ISSUE_PATTERNS,
 )
 
@@ -227,6 +228,25 @@ def detect_hallucination(exchange: Exchange) -> Optional[Issue]:
     return None
 
 
+def detect_server_error(exchange: Exchange) -> Optional[Issue]:
+    """Detect server connection or processing errors."""
+    response = exchange.assistant_response
+    
+    for pattern in SERVER_ERROR_PATTERNS:
+        if pattern.search(response):
+            return Issue(
+                type='server_error',
+                severity='critical',
+                description=f'Server error: "{response[:100]}"',
+                exchange=exchange,
+                context={
+                    'pattern': pattern.pattern,
+                    'error_msg': pattern.search(response).group(0),
+                },
+            )
+    return None
+
+
 def analyze_exchange(
     exchange: Exchange,
     next_exchange: Optional[Exchange] = None,
@@ -244,6 +264,7 @@ def analyze_exchange(
         lambda: detect_context_bloat(exchange),
         lambda: detect_slow_response(exchange),
         lambda: detect_hallucination(exchange),
+        lambda: detect_server_error(exchange),
     ]
     
     # Add loop detection if we have all exchanges
@@ -344,6 +365,6 @@ def calculate_metrics(issues: List[Issue], total_exchanges: int) -> Dict[str, fl
     return {
         'loop_rate': (counts['loop_behavior'] / total_exchanges) * 100,
         'thinking_leak_rate': (counts['thinking_leak'] / total_exchanges) * 100,
-        'error_rate': ((counts['empty_response'] + counts['hallucination']) / total_exchanges) * 100,
+        'error_rate': ((counts['empty_response'] + counts['hallucination'] + counts['server_error']) / total_exchanges) * 100,
         'user_correction_rate': (counts['user_correction'] / total_exchanges) * 100,
     }

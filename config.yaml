@@ -1,22 +1,48 @@
-# ClawLite Configuration - General Assistant
-# All settings here, secrets go in .env
-
-# LLM settings (API keys in .env)
-llm:
-  provider: llama-server  # ollama | openrouter | anthropic | vllm | llama-server
-  timeout: 120
-  model: Qwen3.5-27B-Claude-Opus-Distilled-Q5_K_M
-  # llama.cpp server on Mars
-  base_url: http://192.168.1.7:8080/v1
-  enable_thinking: true
-  temperature: 0.7
-  top_p: 0.9
-  vision: true  # Qwen3.5-27B supports vision with mmproj
+# ClawLite Configuration
+# Environment override: CLAWLITE_CONFIG=/path/to/config.yaml
 
 # Access control
 access:
-  allowed_users: []  # empty = everyone
+  # Allowed users (empty = all allowed, list = only those)
+  # Use prefixed IDs: tg_<id> for Telegram, wa_<id> for WhatsApp
+  allowed_users: []
+  
+  # Admin users (always allowed + bypass tool restrictions)
+  # Example: ["tg_123456", "wa_628123456"]
   admins: []
+
+# LLM settings
+llm:
+  # Provider: ollama | openrouter | llama-server | anthropic
+  provider: llama-server
+  model: Qwen3.5-27B-Claude-Opus-Distilled-Q5_K_M
+  base_url: http://192.168.1.7:8080/v1
+  timeout: 120
+
+# Agent behavior
+agent:
+  max_iterations: 10
+  tool_timeout: 30        # seconds per tool execution
+  total_timeout: 300      # 5 min max per conversation turn
+  retry_attempts: 3       # LLM retry attempts
+  show_tool_calls: false  # Show raw tool_call JSON in stream (debug mode)
+
+# Tool settings
+tools:
+  # Allowed tools (empty = all tools enabled)
+  # Example: only enable specific tools
+  # allowed:
+  #   - read_file
+  #   - write_file
+  #   - web_search
+  allowed: []
+  
+  # Per-tool configuration
+  options:
+    web_search:
+      max_results: 5
+    web_fetch:
+      max_chars: 10000
 
 # Channel settings
 channels:
@@ -24,27 +50,19 @@ channels:
     enabled: true
   whatsapp:
     enabled: false
-    session_dir: /data/whatsapp
-
-# Agent behavior
-agent:
-  max_iterations: 10
-  tool_timeout: 30
-  total_timeout: 300
-
-# Tool filtering - all tools enabled for general use
-tools:
-  allowed: []  # empty = all tools
 
 # Conversation persistence
 conversation:
-  record: true
-  retention_days: 7
-
-# API server
-api:
-  port: 8081
+  record: true           # Enable recording (default OFF)
+  retention_days: 3       # Auto-delete files older than this
 
 # Logging
 logging:
-  level: INFO
+  level: INFO  # DEBUG | INFO | WARNING | ERROR
+
+# Translation layer
+translation:
+  enabled: true
+  api_url: http://host.docker.internal:7655
+  user_lang: ind_Latn
+  llm_lang: eng_Latn

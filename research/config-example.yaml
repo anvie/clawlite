@@ -1,0 +1,72 @@
+# ClawLite AutoImprove Configuration
+
+vllm:
+  url: "http://192.168.1.7:8000/v1"
+  model: "Qwen/Qwen3.5-27B-NVFP4"
+  timeout: 120
+
+conversation:
+  source_pattern: "workspace/users/*/conversations/convo-*.jsonl"
+  min_exchanges: 2  # Skip very short conversations
+  lookback_hours: 24  # Analyze last 24h of convos
+
+analysis:
+  patterns:
+    loop_behavior:
+      description: "Same tool called 3+ times consecutively"
+      threshold: 3
+    thinking_leak:
+      description: "<think> tags or prose reasoning patterns"
+      patterns:
+        - "<think>"
+        - "Actually,"
+        - "Let me "
+        - "I'll "
+        - "First,"
+        - "^\\d+\\."  # Numbered lists
+    empty_response:
+      description: "Agent replies 'Done!' without content"
+      patterns:
+        - "^Done!?$"
+        - "^Selesai!?$"
+    user_correction:
+      description: "User corrects the agent"
+      patterns:
+        - "\\b(no|wrong|salah|bukan|tidak|jangan)\\b"
+    slow_response:
+      threshold_seconds: 30
+
+testing:
+  max_iterations: 10  # Max fix attempts per issue
+  timeout_seconds: 60  # Per-test timeout
+  retry_delay: 2  # Seconds between retries
+
+metrics:
+  targets:
+    response_quality: 85
+    tool_efficiency: 90
+    loop_rate: 0
+    thinking_leak_rate: 0
+    error_rate: 2
+    user_correction_rate: 5
+
+git:
+  auto_commit: true
+  commit_prefix: "autoimprove:"
+  
+cron:
+  schedule: "0 1 * * *"  # Daily at 01:00 WIB
+  timezone: "Asia/Jakarta"
+
+# Fix targets - where to apply fixes (configure for your setup)
+fix_targets:
+  # Production instance (immediate effect)
+  production:
+    workspace: ""  # e.g., /path/to/.clawlite/instances/general/workspace
+    container: ""  # e.g., clawlite-general
+  # Dev repository (for future instances)
+  dev:
+    repo: ""       # e.g., /path/to/clawlite
+    templates: ""  # e.g., /path/to/clawlite/templates
+    src: ""        # e.g., /path/to/clawlite/src
+    prompts: ""    # e.g., /path/to/clawlite/prompts

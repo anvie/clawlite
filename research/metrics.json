@@ -1,9 +1,12 @@
 {
   "version": 1,
-  "last_updated": null,
+  "last_updated": "2026-03-25T01:27:17.730757",
   "last_processed": {
-    "timestamp": "2026-03-25T01:09:28.677508",
-    "files": []
+    "timestamp": "2026-03-25T01:27:17.730809",
+    "files": [
+      "713bf33e953d",
+      "3d727e9718ff"
+    ]
   },
   "baseline": {
     "response_quality": null,
@@ -14,20 +17,20 @@
     "user_correction_rate": null
   },
   "current": {
-    "response_quality": null,
-    "tool_efficiency": null,
-    "loop_rate": null,
-    "thinking_leak_rate": null,
-    "error_rate": null,
-    "user_correction_rate": null
+    "hallucination_rate": 7.3,
+    "server_error_rate": 17.1,
+    "user_correction_rate": 9.8,
+    "loop_rate": 9.8,
+    "context_bloat_rate": 14.6,
+    "thinking_leak_rate": 0.0
   },
   "targets": {
-    "response_quality": 85,
-    "tool_efficiency": 90,
+    "hallucination_rate": 0,
+    "server_error_rate": 2,
+    "user_correction_rate": 5,
     "loop_rate": 0,
-    "thinking_leak_rate": 0,
-    "error_rate": 2,
-    "user_correction_rate": 5
+    "context_bloat_rate": 5,
+    "thinking_leak_rate": 0
   },
   "history": []
 }

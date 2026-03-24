@@ -24,6 +24,7 @@ from .translation import translate_to_english, translate_to_indonesian, is_trans
 from .context import load_full_context, ensure_user_dir, is_bot_unconfigured, load_conversation_history
 from .config import get as config_get
 from .errors import sanitize_error, format_user_error
+from .loop_detector import LoopDetector
 
 logger = logging.getLogger("clawlite.agent")
 
@@ -581,6 +582,16 @@ async def _run_agent_native_tools(
                     except Exception as e:
                         logger.warning(f"Debug callback failed: {e}")
                 
+                # Smart loop detection (check after we have result)
+                should_allow, loop_warning = loop_detector.check(tool_name, tool_args, result_text)
+                if loop_warning:
+                    logger.info(f"Loop detector ({loop_detector.loop_score}): {loop_warning[:100]}")
+                if not should_allow:
+                    # Block and inject intervention message
+                    full_prompt += f"\n\n{loop_warning}\n"
+                    logger.warning("Loop detector blocked tool call")
+                    break  # Exit tool loop, force LLM to try different approach
+                
                 tool_results.append(LLMToolResult(
                     tool_use_id=tc.id,
                     content=result_text,
@@ -816,9 +827,7 @@ async def run_agent(
     MAX_JSON_FAILURES = 3  # Stop after this many consecutive failures
     all_tool_interactions = []  # Collect all tool calls + results for conversation log
     executed_tool_calls = set()  # Track executed calls to prevent duplicates
-    consecutive_same_tool = 0  # Track consecutive calls of same tool
-    last_tool_name = None  # Last tool called
-    MAX_CONSECUTIVE_SAME_TOOL = 3  # Stop after this many consecutive same-tool calls
+    loop_detector = LoopDetector()  # Smart loop detection
     file_moves = {}  # Track file movements: old_path -> new_path
     
     while iterations < max_iterations:
@@ -958,17 +967,8 @@ async def run_agent(
                 continue
             executed_tool_calls.add(call_key)
             
-            # Check for too many consecutive same-tool calls (prevents loops)
-            if tool_name == last_tool_name:
-                consecutive_same_tool += 1
-                if consecutive_same_tool >= MAX_CONSECUTIVE_SAME_TOOL:
-                    logger.warning(f"Too many consecutive {tool_name} calls ({consecutive_same_tool}), breaking loop")
-                    full_prompt += f"{response_part}\n\n<tool_result>\n(Stopped: too many consecutive {tool_name} calls. Please summarize results and respond.)\n</tool_result>\n\nassistant\n"
-                    # Don't continue - let LLM generate final response
-                    break
-            else:
-                consecutive_same_tool = 1
-                last_tool_name = tool_name
+            # Smart loop detection (multi-factor: args, result, gradual intervention)
+            # Check AFTER execution when we have result
             
             # Reset failure counter on successful parse
             json_parse_failures = 0

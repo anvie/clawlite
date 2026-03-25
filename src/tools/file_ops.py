@@ -1,9 +1,76 @@
 """File operation tools - read, write, edit, list, send."""
 
 import os
+import re
 import base64
 import mimetypes
+import subprocess
+import tempfile
 from .base import Tool, ToolResult, WORKSPACE
+
+
+# Binary file signatures (magic bytes)
+BINARY_SIGNATURES = [
+    (b'PK\x03\x04', 'ZIP/Office'),  # ZIP, DOCX, XLSX, PPTX
+    (b'PK\x05\x06', 'ZIP/Office'),  # Empty ZIP
+    (b'%PDF', 'PDF'),
+    (b'\x89PNG', 'PNG'),
+    (b'\xff\xd8\xff', 'JPEG'),
+    (b'GIF8', 'GIF'),
+    (b'RIFF', 'RIFF'),  # WAV, AVI, WEBP
+    (b'\x1f\x8b', 'GZIP'),
+    (b'BZ', 'BZIP2'),
+    (b'\x7fELF', 'ELF'),
+    (b'MZ', 'EXE'),
+    (b'\x00\x00\x00', 'Binary'),  # Common binary prefix
+]
+
+# Office document extensions
+OFFICE_EXTENSIONS = {'.docx', '.xlsx', '.pptx', '.odt', '.ods', '.odp'}
+PDF_EXTENSIONS = {'.pdf'}
+
+
+def is_binary_file(filepath: str, check_content: bool = True) -> tuple[bool, str]:
+    """Check if file is binary based on extension and content.
+    
+    Returns: (is_binary, file_type_description)
+    """
+    _, ext = os.path.splitext(filepath.lower())
+    
+    # Check extension first
+    if ext in OFFICE_EXTENSIONS:
+        return True, f"Office document ({ext})"
+    if ext in PDF_EXTENSIONS:
+        return True, "PDF document"
+    if ext in {'.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.ico'}:
+        return True, f"Image ({ext})"
+    if ext in {'.mp3', '.ogg', '.wav', '.flac', '.m4a'}:
+        return True, f"Audio ({ext})"
+    if ext in {'.mp4', '.avi', '.mkv', '.mov', '.webm'}:
+        return True, f"Video ({ext})"
+    if ext in {'.zip', '.tar', '.gz', '.7z', '.rar'}:
+        return True, f"Archive ({ext})"
+    if ext in {'.exe', '.dll', '.so', '.bin', '.pyc'}:
+        return True, f"Binary ({ext})"
+    
+    # Check content magic bytes
+    if check_content:
+        try:
+            with open(filepath, 'rb') as f:
+                header = f.read(16)
+            
+            for sig, desc in BINARY_SIGNATURES:
+                if header.startswith(sig):
+                    return True, desc
+            
+            # Check for null bytes (common in binary files)
+            if b'\x00' in header:
+                return True, "Binary (contains null bytes)"
+                
+        except Exception:
+            pass
+    
+    return False, "text"
 
 
 class ReadFileTool(Tool):
@@ -26,6 +93,20 @@ For large files, use offset/limit to read specific sections."""
             
             if not os.path.isfile(full_path):
                 return ToolResult(False, "", f"Not a file: {path}")
+            
+            # Check for binary files
+            is_binary, file_type = is_binary_file(full_path)
+            if is_binary:
+                _, ext = os.path.splitext(full_path.lower())
+                if ext in OFFICE_EXTENSIONS or ext in PDF_EXTENSIONS:
+                    return ToolResult(
+                        False, "",
+                        f"Cannot read {file_type} directly. Use extract_document tool instead to extract text content."
+                    )
+                return ToolResult(
+                    False, "",
+                    f"Cannot read binary file ({file_type}). Use appropriate tool for this file type."
+                )
             
             # Size limit (1MB)
             file_size = os.path.getsize(full_path)
@@ -592,3 +673,209 @@ Only use this for loading images from disk that weren't sent in the current mess
             return ToolResult(False, "", str(e))
         except Exception as e:
             return ToolResult(False, "", f"Error loading image: {e}")
+
+
+class ExtractDocumentTool(Tool):
+    """Extract text content from Office documents (PPTX, DOCX, XLSX) and PDFs."""
+    
+    name = "extract_document"
+    description = """Extract text content from documents.
+Supports: PDF, PPTX (PowerPoint), DOCX (Word), XLSX (Excel)
+
+Use this to read the text content from documents that can't be read directly.
+Returns extracted plain text from the document."""
+    
+    parameters = {
+        "path": "string - path to document file",
+        "max_chars": "int - max characters to return (optional, default: 10000)",
+    }
+    
+    async def execute(self, path: str = "", max_chars: int = 10000, **kwargs) -> ToolResult:
+        try:
+            full_path = self.validate_path(path)
+            
+            if not os.path.exists(full_path):
+                return ToolResult(False, "", f"Document not found: {path}")
+            
+            if not os.path.isfile(full_path):
+                return ToolResult(False, "", f"Not a file: {path}")
+            
+            _, ext = os.path.splitext(full_path.lower())
+            
+            # Extract based on file type
+            if ext == '.pdf':
+                text = self._extract_pdf(full_path)
+            elif ext == '.pptx':
+                text = self._extract_pptx(full_path)
+            elif ext == '.docx':
+                text = self._extract_docx(full_path)
+            elif ext == '.xlsx':
+                text = self._extract_xlsx(full_path)
+            else:
+                return ToolResult(
+                    False, "",
+                    f"Unsupported document format: {ext}. Supported: .pdf, .pptx, .docx, .xlsx"
+                )
+            
+            if not text or not text.strip():
+                return ToolResult(False, "", f"Could not extract text from {path} (empty or extraction failed)")
+            
+            # Truncate if needed
+            text = text.strip()
+            if len(text) > max_chars:
+                text = text[:max_chars] + f"\n\n[... truncated, {len(text) - max_chars} more chars]"
+            
+            filename = os.path.basename(full_path)
+            return ToolResult(True, f"=== {filename} ===\n\n{text}")
+            
+        except ValueError as e:
+            return ToolResult(False, "", str(e))
+        except Exception as e:
+            return ToolResult(False, "", f"Error extracting document: {e}")
+    
+    def _extract_pdf(self, filepath: str) -> str:
+        """Extract text from PDF using pdftotext."""
+        try:
+            result = subprocess.run(
+                ['pdftotext', '-layout', filepath, '-'],
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+            if result.returncode == 0:
+                return result.stdout
+            # Try without -layout
+            result = subprocess.run(
+                ['pdftotext', filepath, '-'],
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+            return result.stdout
+        except FileNotFoundError:
+            return "[pdftotext not installed. Install with: apt-get install poppler-utils]"
+        except subprocess.TimeoutExpired:
+            return "[PDF extraction timed out]"
+        except Exception as e:
+            return f"[PDF extraction error: {e}]"
+    
+    def _extract_pptx(self, filepath: str) -> str:
+        """Extract text from PowerPoint using unzip + XML parsing."""
+        try:
+            # PPTX is a ZIP file containing XML
+            result = subprocess.run(
+                ['unzip', '-p', filepath, 'ppt/slides/*.xml'],
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+            
+            if result.returncode != 0:
+                return f"[PPTX extraction failed: {result.stderr}]"
+            
+            xml_content = result.stdout
+            
+            # Extract text from <a:t> tags (PowerPoint text elements)
+            texts = re.findall(r'<a:t>([^<]+)</a:t>', xml_content)
+            
+            # Group by slides (rough approximation)
+            slides = []
+            current_slide = []
+            slide_num = 1
+            
+            for text in texts:
+                text = text.strip()
+                if not text:
+                    continue
+                current_slide.append(text)
+                # Heuristic: if we have collected enough text, consider it a slide
+                if len(current_slide) >= 10 or (text.endswith('.') and len(current_slide) >= 3):
+                    slides.append(f"--- Slide {slide_num} ---\n" + "\n".join(current_slide))
+                    current_slide = []
+                    slide_num += 1
+            
+            # Add remaining text
+            if current_slide:
+                slides.append(f"--- Slide {slide_num} ---\n" + "\n".join(current_slide))
+            
+            if not slides:
+                # Fallback: just return all text joined
+                return "\n".join(texts)
+            
+            return "\n\n".join(slides)
+            
+        except FileNotFoundError:
+            return "[unzip not installed]"
+        except subprocess.TimeoutExpired:
+            return "[PPTX extraction timed out]"
+        except Exception as e:
+            return f"[PPTX extraction error: {e}]"
+    
+    def _extract_docx(self, filepath: str) -> str:
+        """Extract text from Word document using unzip + XML parsing."""
+        try:
+            result = subprocess.run(
+                ['unzip', '-p', filepath, 'word/document.xml'],
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+            
+            if result.returncode != 0:
+                return f"[DOCX extraction failed: {result.stderr}]"
+            
+            xml_content = result.stdout
+            
+            # Extract text from <w:t> tags (Word text elements)
+            texts = re.findall(r'<w:t[^>]*>([^<]+)</w:t>', xml_content)
+            
+            # Join with spaces, but detect paragraph breaks
+            paragraphs = []
+            current_para = []
+            
+            for text in texts:
+                current_para.append(text)
+            
+            # Simple join for now
+            return " ".join(texts)
+            
+        except FileNotFoundError:
+            return "[unzip not installed]"
+        except subprocess.TimeoutExpired:
+            return "[DOCX extraction timed out]"
+        except Exception as e:
+            return f"[DOCX extraction error: {e}]"
+    
+    def _extract_xlsx(self, filepath: str) -> str:
+        """Extract text from Excel using unzip + XML parsing."""
+        try:
+            # First get shared strings (where text is stored)
+            result = subprocess.run(
+                ['unzip', '-p', filepath, 'xl/sharedStrings.xml'],
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+            
+            if result.returncode != 0:
+                # No shared strings, try sheet directly
+                result = subprocess.run(
+                    ['unzip', '-p', filepath, 'xl/worksheets/sheet1.xml'],
+                    capture_output=True,
+                    text=True,
+                    timeout=30
+                )
+            
+            xml_content = result.stdout
+            
+            # Extract text from <t> tags
+            texts = re.findall(r'<t[^>]*>([^<]+)</t>', xml_content)
+            
+            return "\n".join(texts)
+            
+        except FileNotFoundError:
+            return "[unzip not installed]"
+        except subprocess.TimeoutExpired:
+            return "[XLSX extraction timed out]"
+        except Exception as e:
+            return f"[XLSX extraction error: {e}]"

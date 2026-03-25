@@ -205,30 +205,41 @@ def add_to_backlog(idea: str, reason: str) -> None:
     logger.info(f"Added idea to backlog: {idea}")
 
 
-def load_processed_files() -> List[str]:
-    """Load list of already processed file hashes."""
+def load_processed_timestamps() -> Dict[str, str]:
+    """Load dict of {convo_id: last_processed_timestamp_iso}."""
     metrics_path = RESEARCH_DIR / "metrics.json"
     if metrics_path.exists():
         data = json.loads(metrics_path.read_text())
-        return data.get('last_processed', {}).get('files', [])
-    return []
+        return data.get('last_processed', {}).get('timestamps', {})
+    return {}
 
 
-def save_processed_files(file_hashes: List[str]) -> None:
-    """Save list of processed file hashes."""
+def save_processed_timestamps(new_timestamps: Dict[str, str]) -> None:
+    """Save/merge processed timestamps per conversation.
+    
+    Args:
+        new_timestamps: Dict of {convo_id: timestamp_iso} to merge
+    """
     metrics_path = RESEARCH_DIR / "metrics.json"
     data = json.loads(metrics_path.read_text())
     
-    # Merge with existing (keep last 100 to prevent unbounded growth)
-    existing = set(data.get('last_processed', {}).get('files', []))
-    all_hashes = list(existing | set(file_hashes))[-100:]
+    # Merge with existing timestamps (newer wins)
+    existing = data.get('last_processed', {}).get('timestamps', {})
+    for convo_id, ts in new_timestamps.items():
+        existing_ts = existing.get(convo_id)
+        if not existing_ts or ts > existing_ts:
+            existing[convo_id] = ts
+    
+    # Keep only last 30 days of conversations to prevent unbounded growth
+    cutoff = (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d')
+    existing = {k: v for k, v in existing.items() if k.split('_')[-1] >= cutoff}
     
     data['last_processed'] = {
         'timestamp': datetime.now().isoformat(),
-        'files': all_hashes,
+        'timestamps': existing,
     }
     metrics_path.write_text(json.dumps(data, indent=2))
-    logger.info(f"Saved {len(file_hashes)} new processed file hashes")
+    logger.info(f"Saved timestamps for {len(new_timestamps)} conversations")
 
 
 def cmd_analyze(args) -> Dict[str, Any]:
@@ -239,28 +250,28 @@ def cmd_analyze(args) -> Dict[str, Any]:
     lookback_hours = config.get('conversation', {}).get('lookback_hours', 24)
     min_exchanges = config.get('conversation', {}).get('min_exchanges', 2)
     
-    # Load already processed files
-    processed_files = load_processed_files()
-    logger.info(f"Already processed {len(processed_files)} conversation files")
+    # Load already processed timestamps
+    processed_timestamps = load_processed_timestamps()
+    logger.info(f"Tracking {len(processed_timestamps)} conversation timestamps")
     
     logger.info(f"Analyzing conversations from last {lookback_hours} hours")
     
-    # Load conversations (skip already processed)
+    # Load conversations (skip already processed exchanges)
     since = datetime.now() - timedelta(hours=lookback_hours)
-    conversations, new_file_hashes = load_conversations(
+    conversations, new_timestamps = load_conversations(
         workspace_path, 
         since=since, 
         min_exchanges=min_exchanges,
-        processed_files=processed_files,
+        processed_timestamps=processed_timestamps,
     )
     
     if not conversations:
         logger.info("No new conversations to analyze")
-        return {'conversations': 0, 'issues': 0, 'new_file_hashes': []}
+        return {'conversations': 0, 'issues': 0, 'new_timestamps': {}}
     
     # Pattern-based analysis (fast, known issues)
     results = analyze_conversations(conversations)
-    results['new_file_hashes'] = new_file_hashes
+    results['new_timestamps'] = new_timestamps
     
     # LLM-powered analysis (discovers new issues)
     llm_config = config.get('llm_analysis', {})
@@ -443,10 +454,10 @@ def cmd_run(args) -> None:
         logger.info("No new conversations to analyze")
         return
     
-    # Save processed files so we don't re-process them
-    new_file_hashes = analysis.get('new_file_hashes', [])
-    if new_file_hashes:
-        save_processed_files(new_file_hashes)
+    # Save processed timestamps so we don't re-process same exchanges
+    new_timestamps = analysis.get('new_timestamps', {})
+    if new_timestamps:
+        save_processed_timestamps(new_timestamps)
     
     if issues_count == 0:
         logger.info("No issues found - ClawLite is performing well!")

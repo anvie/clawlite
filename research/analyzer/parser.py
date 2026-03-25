@@ -205,22 +205,24 @@ def load_conversations(
     since: Optional[datetime] = None,
     min_exchanges: int = 2,
     processed_files: Optional[List[str]] = None,
-) -> Tuple[List[Conversation], List[str]]:
+    processed_timestamps: Optional[Dict[str, str]] = None,
+) -> Tuple[List[Conversation], Dict[str, str]]:
     """Load all conversations from workspace.
     
     Args:
         workspace_path: Path to ClawLite workspace
         since: Only load conversations since this datetime
         min_exchanges: Skip conversations with fewer exchanges
-        processed_files: List of file hashes already processed (skip these)
+        processed_files: DEPRECATED - use processed_timestamps instead
+        processed_timestamps: Dict of {convo_id: last_processed_timestamp_iso}
         
     Returns:
-        Tuple of (List of Conversation objects, List of new file hashes)
+        Tuple of (List of Conversation objects, Dict of new timestamps per convo_id)
     """
     conversations = []
-    new_file_hashes = []
+    new_timestamps = {}
     workspace = Path(workspace_path)
-    processed_set = set(processed_files or [])
+    processed_ts = processed_timestamps or {}
     
     # Find all conversation files
     pattern = str(workspace / "users" / "*" / "conversations" / "convo-*.jsonl")
@@ -230,12 +232,6 @@ def load_conversations(
     
     for filepath in convo_files:
         filepath = Path(filepath)
-        
-        # Check if already processed (by file hash)
-        file_hash = get_file_hash(filepath)
-        if file_hash in processed_set:
-            logger.debug(f"Skipping already processed: {filepath}")
-            continue
         
         # Extract user_id from path
         # workspace/users/{user_id}/conversations/convo-YYYY-MM-DD.jsonl
@@ -266,9 +262,32 @@ def load_conversations(
         messages = parse_jsonl_file(filepath)
         exchanges = messages_to_exchanges(messages, user_id)
         
-        if len(exchanges) < min_exchanges:
-            logger.debug(f"Skipping {filepath}: only {len(exchanges)} exchanges")
+        if not exchanges:
             continue
+        
+        # Conversation ID for tracking
+        convo_id = f"{user_id}_{date_str}"
+        
+        # Filter exchanges by last processed timestamp
+        last_processed_ts = processed_ts.get(convo_id)
+        if last_processed_ts:
+            try:
+                cutoff = datetime.fromisoformat(last_processed_ts)
+                original_count = len(exchanges)
+                exchanges = [ex for ex in exchanges if ex.timestamp and ex.timestamp > cutoff]
+                if len(exchanges) < original_count:
+                    logger.info(f"Filtered {convo_id}: {original_count} -> {len(exchanges)} exchanges (after {last_processed_ts})")
+            except ValueError:
+                logger.warning(f"Invalid timestamp format for {convo_id}: {last_processed_ts}")
+        
+        if len(exchanges) < min_exchanges:
+            logger.debug(f"Skipping {filepath}: only {len(exchanges)} new exchanges")
+            continue
+        
+        # Track the latest timestamp from this conversation
+        latest_ts = max((ex.timestamp for ex in exchanges if ex.timestamp), default=None)
+        if latest_ts:
+            new_timestamps[convo_id] = latest_ts.isoformat()
         
         convo = Conversation(
             user_id=user_id,
@@ -277,10 +296,9 @@ def load_conversations(
             source_file=str(filepath),
         )
         conversations.append(convo)
-        new_file_hashes.append(file_hash)
-        logger.info(f"Loaded {len(exchanges)} exchanges from {filepath} (hash: {file_hash})")
+        logger.info(f"Loaded {len(exchanges)} new exchanges from {filepath}")
     
-    return conversations, new_file_hashes
+    return conversations, new_timestamps
 
 
 def get_conversations_since(

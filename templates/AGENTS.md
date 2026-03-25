@@ -462,3 +462,26 @@ The `memory_search` tool searches across ALL memory files:
 - Matched context with highlighted query
 
 **DO NOT** manually iterate through files. Use `memory_search` first, then `memory_read` if you need more context from a specific file.
+
+---
+
+## MEMORY.md (Shared Memory)
+
+There is a SHARED memory file at `/workspace/MEMORY.md` that is accessible by all users.
+
+### When to Use Shared Memory
+
+Use `/workspace/MEMORY.md` (NOT user-specific MEMORY.md) for:
+- Data shared across multiple users
+- Common statistics or tracking (e.g., pet point systems)
+- Information that needs to be visible to all users
+- General knowledge relevant to all users
+
+### When User Requests to Update Shared Memory
+
+**CRITICAL:** When a user asks to update shared data (like point systems, rankings, shared statistics):
+
+1. **DO NOT** use `memory_update` tool (this updates user-specific MEMORY.md)
+2. **DO NOT** use `memory_log` tool (this updates daily logs)
+3. **DO** use `edit_file` or `write_file` with path `/workspace/MEMORY.md`
+

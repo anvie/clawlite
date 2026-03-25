@@ -273,6 +273,10 @@ def load_conversations(
         if last_processed_ts:
             try:
                 cutoff = datetime.fromisoformat(last_processed_ts)
+                # Ensure cutoff is timezone-aware for comparison with parsed timestamps
+                if cutoff.tzinfo is None:
+                    from datetime import timezone
+                    cutoff = cutoff.replace(tzinfo=timezone.utc)
                 original_count = len(exchanges)
                 exchanges = [ex for ex in exchanges if ex.timestamp and ex.timestamp > cutoff]
                 if len(exchanges) < original_count:

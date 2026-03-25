@@ -181,6 +181,13 @@ def load_shared_context(user_id: str = None) -> str:
             if content:  # Only add if content remains after preprocessing
                 parts.append(f"## {filename}\n\n{content}")
     
+    # Load shared memory (accessible by all users)
+    shared_memory = read_file_cached(workspace / "MEMORY.md")
+    if shared_memory:
+        content = preprocess_role_content(shared_memory, user_is_admin)
+        if content:
+            parts.append(f"## MEMORY.md (Shared memory)\n\n{content}")
+    
     return "\n\n---\n\n".join(parts)
 
 

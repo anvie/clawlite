@@ -5,6 +5,31 @@ This file tracks all improvement cycles chronologically. Each entry documents an
 ---
 
 <!-- New entries will be prepended below this line -->
+## 2026-03-26 01:00 WIB
+**Cycle:** #20 — Bug Fix + Analysis
+**Conversations analyzed:** 1 (7 new exchanges)
+**Issues detected:** 4
+- ✋ user_correction: 2
+- 💭 thinking_leak: 2
+
+**Bug Fixed:**
+Parser had a datetime timezone comparison bug — stored timestamps were timezone-naive but parsed exchange timestamps were timezone-aware (UTC). This caused `TypeError: can't compare offset-naive and offset-aware datetimes` when filtering exchanges.
+
+**Fix Applied:**
+- `research/analyzer/parser.py`: Added UTC timezone to naive cutoff timestamps before comparison
+- Commit: `5b0f6e4` fix(autoimprove): handle timezone-aware datetime comparison
+
+**Status:** ✅ Analysis pipeline restored
+
+**Notes:**
+- LLM analysis timed out (local LLM server at 192.168.1.7:8080 not responding)
+- Pattern-based detection still working correctly
+- All 101 tests passing
+- Issues detected are relatively minor (2 user corrections, 2 thinking leaks)
+- No significant improvements needed for this cycle
+
+---
+
 ## 2026-03-25 01:25 WIB
 **Cycle:** #19 — Manual Analysis + Critical Fixes Applied
 **Conversations analyzed:** 2 (convo-2026-03-25.jsonl: 7 exchanges, convo-2026-03-24.jsonl: 34 exchanges)

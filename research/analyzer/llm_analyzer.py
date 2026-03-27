@@ -170,6 +170,37 @@ class LLMAnalyzer:
         """Parse JSON from LLM response."""
         if not response:
             return None
+        
+        def extract_balanced_json(text: str) -> Optional[str]:
+            """Extract balanced JSON object from text by matching braces."""
+            start = text.find('{')
+            if start == -1:
+                return None
+            
+            depth = 0
+            in_string = False
+            escape_next = False
+            
+            for i, c in enumerate(text[start:], start):
+                if escape_next:
+                    escape_next = False
+                    continue
+                if c == '\\' and in_string:
+                    escape_next = True
+                    continue
+                if c == '"' and not escape_next:
+                    in_string = not in_string
+                    continue
+                if in_string:
+                    continue
+                    
+                if c == '{':
+                    depth += 1
+                elif c == '}':
+                    depth -= 1
+                    if depth == 0:
+                        return text[start:i+1]
+            return None
             
         # Try multiple extraction strategies
         strategies = [
@@ -179,10 +210,10 @@ class LLMAnalyzer:
             lambda r: json.loads(re.search(r'```json\s*(.*?)\s*```', r, re.DOTALL).group(1)) if "```json" in r else None,
             # 3. Extract from ``` block
             lambda r: json.loads(re.search(r'```\s*(.*?)\s*```', r, re.DOTALL).group(1)) if "```" in r else None,
-            # 4. Find JSON object pattern
-            lambda r: json.loads(re.search(r'\{[^{}]*"issues"[^{}]*\[.*?\][^{}]*\}', r, re.DOTALL).group(0)) if '"issues"' in r else None,
-            # 5. Find any JSON object starting with {
-            lambda r: json.loads(re.search(r'\{.*\}', r, re.DOTALL).group(0)),
+            # 4. Find balanced JSON object containing "issues"
+            lambda r: json.loads(extract_balanced_json(r)) if '"issues"' in r and extract_balanced_json(r) else None,
+            # 5. Find any balanced JSON object
+            lambda r: json.loads(extract_balanced_json(r)) if extract_balanced_json(r) else None,
         ]
         
         for i, strategy in enumerate(strategies):

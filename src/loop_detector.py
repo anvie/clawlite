@@ -38,8 +38,8 @@ class ToolCallRecord:
 class LoopDetector:
     """Smart loop detector with multi-factor analysis."""
     
-    WARNING_THRESHOLD = 3
-    BLOCK_THRESHOLD = 5
+    WARNING_THRESHOLD = 2  # Warn earlier (was 3)
+    BLOCK_THRESHOLD = 4    # Block earlier (was 5)
     MAX_HISTORY = 20
     
     def __init__(self):

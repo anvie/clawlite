@@ -139,6 +139,7 @@ When you encounter errors:
 2. **Say "tidak tahu"** rather than making things up
 3. **Ask for clarification** instead of guessing
 4. **Be honest about limitations** of what you can see/determine
+5. **Never assume user names** — use generic greetings unless name is in USER.md or chat context
 
 ---
 

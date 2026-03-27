@@ -993,3 +993,63 @@ def build_tool_result_message(tool_results: List[ToolResult]) -> Dict[str, Any]:
             "is_error": result.is_error,
         })
     return {"role": "user", "content": content}
+
+
+# =============================================================================
+# Response Validation
+# =============================================================================
+
+# Patterns that indicate incomplete/truncated responses
+_TRUNCATION_PATTERNS = [
+    # Sentence cut off mid-word (ends with partial word)
+    r'\b\w{1,3}$',  # Very short word at end might be cut off
+    # Incomplete markdown
+    r'\*\*[^*]+$',  # Unclosed bold
+    r'`[^`]+$',     # Unclosed inline code
+    r'```[^`]*$',   # Unclosed code block
+    # Incomplete lists
+    r'\n\d+\.\s*$',  # Numbered list with no content
+    r'\n-\s*$',      # Bullet list with no content
+    # Incomplete tool calls
+    r'<tool_call>\s*$',
+    r'\{"tool":\s*"[^"]*",\s*"args":\s*\{[^}]*$',
+]
+
+# Minimum response length to consider valid (chars)
+_MIN_RESPONSE_LENGTH = 10
+
+
+def validate_response(response: str, stop_reason: str = None) -> tuple[bool, str]:
+    """
+    Validate LLM response for completeness.
+    
+    Returns:
+        (is_valid, issue_description)
+    """
+    if not response or len(response.strip()) < _MIN_RESPONSE_LENGTH:
+        # Very short responses might be OK (e.g., "OK", "Done")
+        # Only flag if stop_reason indicates truncation
+        if stop_reason and stop_reason not in ("end_turn", "stop", "tool_use"):
+            return False, f"Response too short, stop_reason={stop_reason}"
+    
+    response_stripped = response.strip()
+    
+    # Check for truncation patterns
+    import re
+    for pattern in _TRUNCATION_PATTERNS:
+        if re.search(pattern, response_stripped):
+            # Additional check: if response is substantial and ends with common endings, it's OK
+            if len(response_stripped) > 100:
+                # Common valid endings
+                valid_endings = ('.', '!', '?', ')', ']', '```', '"', "'", ':', '😊', '👍')
+                if response_stripped.endswith(valid_endings):
+                    continue
+            return False, f"Possible truncation (pattern: {pattern[:20]}...)"
+    
+    return True, ""
+
+
+def is_response_incomplete(response: str, stop_reason: str = None) -> bool:
+    """Simple check if response appears incomplete."""
+    is_valid, _ = validate_response(response, stop_reason)
+    return not is_valid

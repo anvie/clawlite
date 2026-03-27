@@ -14,20 +14,20 @@ SENSITIVE_PATTERNS = [
     (r'/app/[^\s\'"]*', '[PATH]'),  # Container paths
 ]
 
-# User-friendly error messages (more informative)
+# User-friendly error messages (personality-aware, casual Indonesian)
 ERROR_MESSAGES = {
-    "connection": "Tidak dapat terhubung ke server AI. Kemungkinan server sedang restart atau ada masalah jaringan.",
-    "timeout": "Request ke AI terlalu lama. Server mungkin sedang sibuk, coba lagi.",
-    "500": "Server AI sedang bermasalah (500). Tim sedang memperbaiki.",
-    "502": "Server AI tidak dapat dijangkau (502). Coba lagi dalam beberapa menit.",
-    "503": "Server AI sedang sibuk (503). Coba lagi dalam beberapa menit.",
-    "429": "Terlalu banyak request. Tunggu 30 detik lalu coba lagi.",
-    "401": "Autentikasi gagal. Hubungi admin.",
-    "403": "Akses ditolak.",
-    "404": "Resource tidak ditemukan.",
-    "rate limit": "Rate limit tercapai. Tunggu 30 detik lalu coba lagi.",
-    "model": "AI model error. Coba kirim ulang pesan.",
-    "default": "Terjadi kesalahan. Coba kirim ulang pesan.",
+    "connection": "Waduh, ga bisa konek ke server AI nih. 😅 Mungkin lagi restart atau ada masalah jaringan. Coba lagi ya!",
+    "timeout": "Hmm, server AI lama banget responnya. 🐢 Mungkin lagi sibuk, coba kirim ulang ya.",
+    "500": "Server AI lagi bermasalah (500). 🔧 Tim lagi benerin, coba lagi nanti ya.",
+    "502": "Server AI ga bisa dijangkau (502). 📡 Coba lagi dalam beberapa menit.",
+    "503": "Server AI lagi sibuk banget (503). ⏳ Coba lagi dalam beberapa menit ya.",
+    "429": "Kebanyakan request nih. 😅 Tunggu 30 detik dulu ya, baru coba lagi.",
+    "401": "Autentikasi gagal. 🔐 Coba hubungi admin.",
+    "403": "Akses ditolak. 🚫",
+    "404": "Resource ga ketemu. 🔍",
+    "rate limit": "Rate limit kena. ⏰ Tunggu 30 detik dulu ya.",
+    "model": "Ada error di AI model. 🤖 Coba kirim ulang pesan ya.",
+    "default": "Ada yang error nih. 😅 Coba kirim ulang pesan ya.",
 }
 
 

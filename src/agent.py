@@ -95,6 +95,7 @@ def strip_thinking_tags(text: str) -> str:
     # These are internal monologue that shouldn't be shown to users
     prose_thinking_patterns = [
         # Start of response patterns
+        r'^Hmm,?[^\n]*\n*',  # Common thinking leak
         r'^The user is asking[^\n]*\n*',
         r'^I need to [^\n]*\n*',
         r'^Let me [^\n]*\n*',

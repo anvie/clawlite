@@ -6,7 +6,60 @@ import base64
 import mimetypes
 import subprocess
 import tempfile
+import time
+import logging
+from functools import lru_cache
 from .base import Tool, ToolResult, WORKSPACE
+
+logger = logging.getLogger("clawlite.tools.file_ops")
+
+# In-memory file cache (path -> (mtime, content, total_lines))
+# Prevents re-reading unchanged files within same session
+_file_cache: dict[str, tuple[float, list[str], int]] = {}
+_CACHE_MAX_ENTRIES = 50
+
+
+def _get_cached_content(path: str) -> tuple[list[str], int] | None:
+    """Get cached file content if still valid (mtime unchanged)."""
+    if path not in _file_cache:
+        return None
+    cached_mtime, lines, total = _file_cache[path]
+    try:
+        current_mtime = os.path.getmtime(path)
+        if current_mtime == cached_mtime:
+            logger.debug(f"File cache hit: {path}")
+            return lines, total
+        else:
+            # File changed, invalidate
+            del _file_cache[path]
+            return None
+    except OSError:
+        return None
+
+
+def _cache_content(path: str, lines: list[str]):
+    """Cache file content with mtime."""
+    global _file_cache
+    # Prune cache if too large
+    if len(_file_cache) >= _CACHE_MAX_ENTRIES:
+        # Remove oldest half
+        sorted_paths = sorted(_file_cache.keys(), key=lambda p: _file_cache[p][0])
+        for p in sorted_paths[:_CACHE_MAX_ENTRIES // 2]:
+            del _file_cache[p]
+    
+    try:
+        mtime = os.path.getmtime(path)
+        _file_cache[path] = (mtime, lines, len(lines))
+        logger.debug(f"File cached: {path} ({len(lines)} lines)")
+    except OSError:
+        pass
+
+
+def clear_file_cache():
+    """Clear the file cache (called at start of new session)."""
+    global _file_cache
+    _file_cache.clear()
+    logger.debug("File cache cleared")
 
 
 # Binary file signatures (magic bytes)
@@ -113,10 +166,16 @@ For large files, use offset/limit to read specific sections."""
             if file_size > 1_000_000:
                 return ToolResult(False, "", f"File too large (>1MB): {path}")
             
-            with open(full_path, "r", encoding="utf-8", errors="replace") as f:
-                all_lines = f.readlines()
-            
-            total_lines = len(all_lines)
+            # Try cache first
+            cached = _get_cached_content(full_path)
+            if cached:
+                all_lines, total_lines = cached
+            else:
+                with open(full_path, "r", encoding="utf-8", errors="replace") as f:
+                    all_lines = f.readlines()
+                total_lines = len(all_lines)
+                # Cache for future reads
+                _cache_content(full_path, all_lines)
             
             # Handle offset/limit
             offset = max(1, int(offset))  # 1-indexed

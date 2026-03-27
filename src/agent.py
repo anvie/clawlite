@@ -20,6 +20,14 @@ from .llm import (
 )
 from .tools import get_tool, format_tools_for_prompt, list_tools, SKILL_TOOLS
 from .tool_parser import extract_tool_call, has_pending_tool_call
+from .tool_validator import (
+    parse_and_validate_tool_call,
+    format_validation_feedback,
+    format_parse_error_feedback,
+    coerce_types,
+    validate_tool_call,
+)
+from .tools.schemas import get_schema
 from .translation import translate_to_english, translate_to_indonesian, is_translation_enabled
 from .context import load_full_context, ensure_user_dir, is_bot_unconfigured, load_conversation_history
 from .config import get as config_get
@@ -135,6 +143,9 @@ LLM_RETRY_DELAY = 2  # base delay for exponential backoff
 TOTAL_TIME_LIMIT = config_get('agent.total_timeout', 300)
 SHOW_TOOL_CALLS = config_get('agent.show_tool_calls', False)  # Show raw tool_call in stream (debug)
 DEBUG_TOOL_ERRORS = config_get('agent.debug_tool_errors', True)  # Send failed tool calls as separate message
+# Function Calling Harness (Phase 1-3)
+HARNESS_ENABLED = config_get('agent.harness_enabled', True)  # Enable schema validation + self-healing
+HARNESS_MAX_RETRIES = config_get('agent.harness_max_retries', 2)  # Max validation retries
 
 # Per-tool output limits (chars) - larger for code reading tools
 TOOL_OUTPUT_LIMITS = {
@@ -953,6 +964,33 @@ async def run_agent(
                 
                 full_prompt += f"{response_part}\n\n<tool_result>\nError: Tool '{tool_name}' requires arguments: {', '.join(required_args)}. Please provide complete arguments.\n</tool_result>\n\nassistant\n"
                 continue
+            
+            # =====================================================================
+            # Function Calling Harness: Schema Validation (Phase 3)
+            # =====================================================================
+            if HARNESS_ENABLED:
+                # Get schema for this tool
+                schema = get_schema(tool_name)
+                
+                # Apply type coercion based on schema
+                if schema:
+                    tool_args = coerce_types(tool_args, schema)
+                
+                # Validate against schema
+                is_valid, validation_errors = validate_tool_call(tool_name, tool_args)
+                
+                if not is_valid:
+                    # Format feedback for LLM
+                    feedback = format_validation_feedback(
+                        json.dumps(parsed_tool),
+                        validation_errors,
+                        tool_name
+                    )
+                    logger.warning(f"Tool {tool_name} validation failed: {[e['path'] for e in validation_errors]}")
+                    
+                    # Send feedback to LLM and get retry
+                    full_prompt += f"{response_part}\n\n<tool_result>\n{feedback}\n</tool_result>\n\nassistant\n"
+                    continue  # Retry with feedback
             
             logger.info(f"Executing tool: {tool_name} with args: {list(tool_args.keys())}")
             

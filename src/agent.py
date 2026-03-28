@@ -858,6 +858,7 @@ async def run_agent(
     MAX_JSON_FAILURES = 3  # Stop after this many consecutive failures
     all_tool_interactions = []  # Collect all tool calls + results for conversation log
     executed_tool_calls = set()  # Track executed calls to prevent duplicates
+    consecutive_duplicate_skips = 0  # Track how many times we've skipped in a row
     loop_detector = LoopDetector()  # Smart loop detection
     file_moves = {}  # Track file movements: old_path -> new_path
     
@@ -1039,32 +1040,28 @@ async def run_agent(
                 call_key = f"{tool_name}:{str(tool_args)}"
             
             if call_key in executed_tool_calls:
-                duplicate_count = sum(1 for k in executed_tool_calls if k.startswith(f"{tool_name}:"))
-                logger.info(f"Skipping duplicate tool call: {tool_name} (duplicate #{duplicate_count})")
+                consecutive_duplicate_skips += 1
+                logger.info(f"Skipping duplicate tool call: {tool_name} (skip #{consecutive_duplicate_skips})")
+                
+                # After 3 consecutive duplicate skips, FORCE break out of loop
+                if consecutive_duplicate_skips >= 3:
+                    logger.warning(f"Too many consecutive duplicate skips ({consecutive_duplicate_skips}), forcing response")
+                    if not accumulated_response.strip():
+                        accumulated_response = "⚠️ I got stuck in a loop. Please try rephrasing your request or breaking it into smaller steps."
+                    break
                 
                 # Provide helpful feedback to break the loop
-                if tool_name == "read_file":
-                    feedback = (
-                        f"ERROR: You already called read_file with these exact arguments.\n"
-                        f"The result was already provided above.\n"
-                        f"If you need to read MORE of the file, use a DIFFERENT offset value.\n"
-                        f"If you have all the info you need, provide your response to the user."
-                    )
-                else:
-                    feedback = (
-                        f"ERROR: Duplicate call to {tool_name} with same arguments.\n"
-                        f"Result was already provided. Use different arguments or respond to user."
-                    )
+                feedback = (
+                    f"STOP! You already called {tool_name} with these EXACT arguments.\n"
+                    f"The result is in the conversation above - DO NOT call again.\n"
+                    f"You MUST now provide your response to the user based on the information you have."
+                )
                 
                 full_prompt += f"{response_part}\n\n<tool_result>\n{feedback}\n</tool_result>\n\nassistant\n"
-                
-                # After 3 duplicates of same tool, force break
-                if duplicate_count >= 3:
-                    logger.warning(f"Too many duplicate {tool_name} calls, forcing response")
-                    accumulated_response += f"\n\n⚠️ Stuck in loop trying to read file. Please simplify your request."
-                    break
-                    
                 continue
+                
+            # Reset consecutive skip counter on successful NEW tool call
+            consecutive_duplicate_skips = 0
             executed_tool_calls.add(call_key)
             
             # Smart loop detection (multi-factor: args, result, gradual intervention)

@@ -11,6 +11,7 @@ from datetime import datetime
 from typing import Optional
 
 from telegram import Update
+from telegram.error import RetryAfter
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -437,6 +438,17 @@ class TelegramChannel(BaseChannel):
         except asyncio.CancelledError:
             self.logger.info(f"🛑 Task cancelled for {user_id}")
             await status_msg.edit_text("🛑 Stopped.")
+        
+        except RetryAfter as e:
+            wait_time = e.retry_after
+            self.logger.error(f"Flood control for user {user_id}: retry after {wait_time}s")
+            try:
+                await status_msg.edit_text(
+                    f"⏳ Telegram rate limit hit. Response ready but delivery delayed.\n"
+                    f"Wait {wait_time}s then send /retry to get your response."
+                )
+            except Exception:
+                pass
             
         except Exception as e:
             self.logger.error(f"Error for user {user_id}: {e}")
@@ -549,7 +561,7 @@ class TelegramChannel(BaseChannel):
         text: str,
         max_len: int = 4000
     ) -> None:
-        """Send long text in chunks."""
+        """Send long text in chunks with flood control handling."""
         chunks = []
         
         while text:
@@ -566,19 +578,56 @@ class TelegramChannel(BaseChannel):
             chunks.append(text[:break_point])
             text = text[break_point:].strip()
         
+        async def send_with_retry(send_func, max_retries: int = 3):
+            """Send message with flood control retry."""
+            for attempt in range(max_retries):
+                try:
+                    return await send_func()
+                except RetryAfter as e:
+                    wait_time = e.retry_after + 1  # Add 1s buffer
+                    self.logger.warning(f"Flood control hit, waiting {wait_time}s (attempt {attempt + 1}/{max_retries})")
+                    
+                    # Inform user about the wait
+                    if attempt == 0:
+                        try:
+                            await update.message.reply_text(f"⏳ Rate limited, waiting {wait_time}s...")
+                        except Exception:
+                            pass
+                    
+                    await asyncio.sleep(wait_time)
+                except Exception as e:
+                    # Non-flood error, don't retry
+                    raise
+            # All retries exhausted
+            raise Exception(f"Failed to send after {max_retries} flood control retries")
+        
         # First chunk: edit status message
         first_chunk = chunks[0]
         try:
-            await status_msg.edit_text(first_chunk, parse_mode="Markdown")
+            await send_with_retry(lambda: status_msg.edit_text(first_chunk, parse_mode="Markdown"))
+        except RetryAfter:
+            raise  # Let it propagate after retries exhausted
         except Exception:
-            await status_msg.edit_text(first_chunk)
-        
-        # Remaining chunks: new messages
-        for chunk in chunks[1:]:
             try:
-                await update.message.reply_text(chunk, parse_mode="Markdown")
+                await send_with_retry(lambda: status_msg.edit_text(first_chunk))
             except Exception:
-                await update.message.reply_text(chunk)
+                pass
+        
+        # Remaining chunks: new messages with small delay to avoid flood
+        for i, chunk in enumerate(chunks[1:]):
+            # Add small delay between chunks to avoid triggering flood control
+            if i > 0:
+                await asyncio.sleep(0.5)
+            
+            try:
+                await send_with_retry(lambda c=chunk: update.message.reply_text(c, parse_mode="Markdown"))
+            except RetryAfter:
+                raise  # Propagate after retries exhausted
+            except Exception:
+                try:
+                    await send_with_retry(lambda c=chunk: update.message.reply_text(c))
+                except Exception:
+                    self.logger.error(f"Failed to send chunk {i + 2}/{len(chunks)}")
     
     async def _handle_photo(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle photo messages."""

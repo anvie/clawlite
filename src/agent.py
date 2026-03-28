@@ -1039,8 +1039,31 @@ async def run_agent(
                 call_key = f"{tool_name}:{str(tool_args)}"
             
             if call_key in executed_tool_calls:
-                logger.info(f"Skipping duplicate tool call: {tool_name}")
-                full_prompt += f"{response_part}\n\n<tool_result>\n(Skipped: duplicate call - already executed)\n</tool_result>\n\nassistant\n"
+                duplicate_count = sum(1 for k in executed_tool_calls if k.startswith(f"{tool_name}:"))
+                logger.info(f"Skipping duplicate tool call: {tool_name} (duplicate #{duplicate_count})")
+                
+                # Provide helpful feedback to break the loop
+                if tool_name == "read_file":
+                    feedback = (
+                        f"ERROR: You already called read_file with these exact arguments.\n"
+                        f"The result was already provided above.\n"
+                        f"If you need to read MORE of the file, use a DIFFERENT offset value.\n"
+                        f"If you have all the info you need, provide your response to the user."
+                    )
+                else:
+                    feedback = (
+                        f"ERROR: Duplicate call to {tool_name} with same arguments.\n"
+                        f"Result was already provided. Use different arguments or respond to user."
+                    )
+                
+                full_prompt += f"{response_part}\n\n<tool_result>\n{feedback}\n</tool_result>\n\nassistant\n"
+                
+                # After 3 duplicates of same tool, force break
+                if duplicate_count >= 3:
+                    logger.warning(f"Too many duplicate {tool_name} calls, forcing response")
+                    accumulated_response += f"\n\n⚠️ Stuck in loop trying to read file. Please simplify your request."
+                    break
+                    
                 continue
             executed_tool_calls.add(call_key)
             

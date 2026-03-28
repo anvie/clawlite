@@ -328,8 +328,17 @@ async def execute_tool_with_timeout(tool, args: dict, timeout: int = TOOL_TIMEOU
         return ToolResult(False, "", f"Tool error: {str(e)}")
 
 
-async def stream_with_retry(prompt: str, images: list = None, max_retries: int = LLM_MAX_RETRIES):
-    """Stream LLM response with retry logic for transient errors."""
+async def stream_with_retry(
+    prompt: str, 
+    images: list = None, 
+    max_retries: int = LLM_MAX_RETRIES,
+    status_callback: Optional[Callable[[str], Awaitable[None]]] = None,
+):
+    """Stream LLM response with retry logic for transient errors.
+    
+    Now includes status_callback to inform user during retries instead of
+    leaving them waiting in silence.
+    """
     last_error = None
     
     for attempt in range(max_retries):
@@ -340,9 +349,10 @@ async def stream_with_retry(prompt: str, images: list = None, max_retries: int =
         except Exception as e:
             last_error = e
             error_name = type(e).__name__
+            error_str = str(e).lower()
             
             # Check if it's a retryable error
-            retryable = any(x in error_name.lower() or x in str(e).lower() for x in [
+            retryable = any(x in error_name.lower() or x in error_str for x in [
                 'timeout', 'connection', 'network', 'temporary', '503', '502', '429',
                 'disconnect', 'remote', 'protocol', '500', 'server error',
             ])
@@ -350,6 +360,15 @@ async def stream_with_retry(prompt: str, images: list = None, max_retries: int =
             if retryable and attempt < max_retries - 1:
                 delay = LLM_RETRY_DELAY * (2 ** attempt)
                 logger.warning(f"LLM request failed ({error_name}), retrying in {delay}s (attempt {attempt + 1}/{max_retries})")
+                
+                # INFORM USER during retry (they were waiting in silence before!)
+                if status_callback:
+                    try:
+                        retry_msg = f"⚠️ LLM error ({error_name}), retrying in {delay}s... ({attempt + 1}/{max_retries})"
+                        await status_callback(retry_msg)
+                    except Exception as cb_err:
+                        logger.warning(f"Status callback during retry failed: {cb_err}")
+                
                 await asyncio.sleep(delay)
             else:
                 logger.error(f"LLM request failed permanently: {e}")
@@ -871,7 +890,11 @@ async def run_agent(
                 current_images.extend(pending_images)
                 pending_images = []  # Clear after use
             
-            async for token, is_thinking, thinking_content in stream_with_retry(full_prompt, images=current_images if current_images else None):
+            async for token, is_thinking, thinking_content in stream_with_retry(
+                full_prompt, 
+                images=current_images if current_images else None,
+                status_callback=status_callback,
+            ):
                 current_response += token
                 
                 if thinking_content:
@@ -911,10 +934,25 @@ async def run_agent(
         except Exception as e:
             logger.error(f"LLM streaming failed after retries: {e}")
             error_msg = sanitize_error(e)
+            
+            # Inform user immediately via status callback (don't leave them hanging!)
+            if status_callback:
+                try:
+                    await status_callback(f"❌ LLM failed after {LLM_MAX_RETRIES} retries: {error_msg}")
+                except Exception as cb_err:
+                    logger.warning(f"Status callback failed: {cb_err}")
+            
+            # Include context about what was interrupted
+            task_context = ""
+            if iterations > 1:
+                task_context = f" (interrupted at iteration {iterations})"
+            if last_tool_result:
+                task_context += f" after {last_tool_result.get('tool', 'unknown')} tool"
+            
             if accumulated_response:
-                accumulated_response += f"\n\n❌ {error_msg}"
+                accumulated_response += f"\n\n❌ {error_msg}{task_context}"
             else:
-                accumulated_response = f"❌ {error_msg}"
+                accumulated_response = f"❌ {error_msg}{task_context}\n\nSilakan coba kirim ulang pesan kamu."
             break
         
         # Extract response after thinking
@@ -1168,7 +1206,7 @@ async def run_agent(
         try:
             # Run one more LLM call to get interpretation
             continuation_response = ""
-            async for token, is_thinking, _ in stream_with_retry(continuation_prompt):
+            async for token, is_thinking, _ in stream_with_retry(continuation_prompt, status_callback=status_callback):
                 if not is_thinking:
                     continuation_response += token
             

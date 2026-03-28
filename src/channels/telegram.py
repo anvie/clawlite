@@ -365,16 +365,39 @@ class TelegramChannel(BaseChannel):
         # Send initial status
         status_msg = await update.message.reply_text("🧠 _Thinking..._", parse_mode="Markdown")
         
+        # Throttled status updates to avoid Telegram flood control
+        # Only update every 3 seconds with minimal "Still working..." message
+        last_status_update = [0.0]  # Use list for mutable closure
+        MIN_STATUS_INTERVAL = 3.0  # Minimum seconds between status updates
+        
         async def update_status(text):
+            import time
+            current_time = time.time()
+            
+            # Throttle updates to prevent flood control
+            if current_time - last_status_update[0] < MIN_STATUS_INTERVAL:
+                return  # Skip this update, too soon
+            
+            last_status_update[0] = current_time
+            
             try:
-                if len(text) > 4000:
-                    text = text[:4000] + "..."
-                await status_msg.edit_text(text, parse_mode="Markdown")
+                # Show simplified status instead of full content preview
+                # This reduces message edits and avoids flood control
+                if "🔧" in text or "tool" in text.lower():
+                    # Tool execution - show brief status
+                    display_text = "🔧 _Executing tool..._"
+                elif "🧠" in text or "thinking" in text.lower():
+                    display_text = "🧠 _Thinking..._"
+                elif "⚠️" in text or "retry" in text.lower():
+                    # Error/retry messages should be shown
+                    display_text = text[:500] if len(text) > 500 else text
+                else:
+                    # Generic "still working" for everything else
+                    display_text = "⏳ _Still working..._"
+                
+                await status_msg.edit_text(display_text, parse_mode="Markdown")
             except Exception:
-                try:
-                    await status_msg.edit_text(text[:4000])
-                except Exception:
-                    pass
+                pass  # Silently ignore status update failures
         
         # Get conversation history
         if user_id not in self.conversations:
@@ -432,8 +455,35 @@ class TelegramChannel(BaseChannel):
                 await status_msg.edit_text("✅ Done!")
                 return
             
-            # Send response in chunks
-            await self._send_chunked(update, status_msg, final_text)
+            # Send final response - avoid chunking to prevent flood control
+            MAX_TELEGRAM_MSG = 4000
+            
+            if len(final_text) <= MAX_TELEGRAM_MSG:
+                # Short enough - send directly
+                try:
+                    await status_msg.edit_text(final_text, parse_mode="Markdown")
+                except Exception:
+                    await status_msg.edit_text(final_text)
+            else:
+                # Too long - send as text file to avoid flood control
+                import io
+                self.logger.info(f"Response too long ({len(final_text)} chars), sending as file")
+                
+                # Delete status message
+                try:
+                    await status_msg.delete()
+                except Exception:
+                    pass
+                
+                # Send as text file
+                file_obj = io.BytesIO(final_text.encode('utf-8'))
+                file_obj.name = "response.md"
+                
+                await update.message.reply_document(
+                    document=file_obj,
+                    filename="response.md",
+                    caption="📄 Response too long for message, sent as file."
+                )
         
         except asyncio.CancelledError:
             self.logger.info(f"🛑 Task cancelled for {user_id}")

@@ -1052,9 +1052,13 @@ async def run_agent(
                 
                 # Provide helpful feedback to break the loop
                 feedback = (
-                    f"STOP! You already called {tool_name} with these EXACT arguments.\n"
-                    f"The result is in the conversation above - DO NOT call again.\n"
-                    f"You MUST now provide your response to the user based on the information you have."
+                    f"⛔ DUPLICATE BLOCKED: You already called {tool_name} with these EXACT arguments.\n"
+                    f"The result is ALREADY in the conversation above.\n\n"
+                    f"YOU MUST DO ONE OF THESE:\n"
+                    f"1. Call a DIFFERENT tool, OR\n"
+                    f"2. Call the SAME tool with DIFFERENT arguments (different path, different command), OR\n"
+                    f"3. Provide your final response to the user.\n\n"
+                    f"DO NOT repeat the same call. Move to your NEXT step."
                 )
                 
                 full_prompt += f"{response_part}\n\n<tool_result>\n{feedback}\n</tool_result>\n\nassistant\n"
@@ -1155,8 +1159,18 @@ async def run_agent(
                     moves_str = "\n".join([f"  - {src} → {dst}" for src, dst in file_moves.items()])
                     file_move_context = f"\n[FILE MOVES - use new paths:\n{moves_str}]\n"
                 
+                # Step-tracking prompt injection to keep model on track
+                step_tracking = ""
+                if result.success and iterations > 1:
+                    step_tracking = (
+                        "\n\n[STEP TRACKING: This tool call is COMPLETE. "
+                        "DO NOT repeat this same call. "
+                        "Proceed to your NEXT planned step with DIFFERENT arguments, "
+                        "or provide your response to the user if all steps are done.]"
+                    )
+                
                 # Add to prompt for next iteration (LLM will interpret this)
-                full_prompt += f"{response_part}\n\n<tool_result>\n{result_text}{file_move_context}\n</tool_result>\n\nassistant\n"
+                full_prompt += f"{response_part}\n\n<tool_result>\n{result_text}{file_move_context}{step_tracking}\n</tool_result>\n\nassistant\n"
                 
             else:
                 error_text = f"Unknown tool: {tool_name}"

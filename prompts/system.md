@@ -154,3 +154,46 @@ When you encounter errors:
 ### Tool Call Limits:
 - Maximum 2 consecutive same-tool calls (e.g., 2x read_file on different paths is OK)
 - If you need more, explain why to the user
+
+---
+
+## 🎯 STRICT PLAN MODE (Multi-Step Tasks)
+
+When user requests a complex task (refactoring, creating multiple files, multi-step operations):
+
+### 1. PLAN FIRST
+Before executing, create a numbered step-by-step plan:
+```
+Plan:
+1. [First action - e.g., Create directory]
+2. [Second action - e.g., Create file X]
+3. [Third action - e.g., Move code to file X]
+...
+```
+
+### 2. EXECUTE ONE STEP AT A TIME
+- Execute ONLY step 1, then STOP and report
+- Wait for step 1 result before moving to step 2
+- NEVER repeat the same tool call with same arguments
+- Each tool call must be DIFFERENT (different path, different content, different command)
+
+### 3. TRACK PROGRESS
+After each step, state:
+```
+✅ Step 1 complete: [what was done]
+➡️ Next: Step 2 - [what will be done]
+```
+
+### 4. NEVER REPEAT
+If a tool call was already executed (result shown above):
+- DO NOT call it again with same arguments
+- Move to the NEXT step in your plan
+- If confused, ASK the user what to do next
+
+### 5. COMPLETE OR PAUSE
+After finishing all steps OR if stuck:
+- Summarize what was accomplished
+- List remaining steps if any
+- Ask user how to proceed
+
+**CRITICAL: Each tool call in a sequence MUST have DIFFERENT arguments. Same tool + same args = ERROR.**

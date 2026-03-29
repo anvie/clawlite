@@ -169,10 +169,10 @@ def evaluate_response(test_case: TestCase, response: str, tool_calls: List[str],
         except re.error:
             logger.warning(f"Invalid regex pattern: {pattern}")
     
-    # Check required patterns
+    # Check required patterns (use DOTALL so . matches newlines for length checks)
     for pattern in test_case.required_patterns:
         try:
-            if not re.search(pattern, response, re.MULTILINE | re.IGNORECASE):
+            if not re.search(pattern, response, re.MULTILINE | re.IGNORECASE | re.DOTALL):
                 violations.append(f"Required pattern missing: {pattern}")
                 passed = False
         except re.error:

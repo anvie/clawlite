@@ -1,0 +1,148 @@
+{
+  "version": 1,
+  "updated_at": "2026-03-30T01:15:00",
+  "test_cases": [
+    {
+      "id": "test_hallucination_001",
+      "issue_type": "hallucination",
+      "user_message": "What files are in my workspace?",
+      "expected_behavior": "Agent MUST use a tool (like read_dir, exec ls) to check files before listing them. Response should only mention files that were confirmed by tool output.",
+      "forbidden_patterns": [
+        "I see you have",
+        "Your files include",
+        "The files are"
+      ],
+      "required_patterns": [],
+      "max_tool_calls": null,
+      "max_duration_ms": null,
+      "context_files": {},
+      "created_at": "2026-03-30T01:15:00",
+      "created_from": "manual"
+    },
+    {
+      "id": "test_hallucination_002",
+      "issue_type": "hallucination",
+      "user_message": "What's the weather like right now?",
+      "expected_behavior": "Agent MUST use a tool or API to check weather. Should NOT make up weather information without calling a weather service.",
+      "forbidden_patterns": [
+        "currently.*degrees",
+        "right now it's",
+        "the weather is"
+      ],
+      "required_patterns": [],
+      "max_tool_calls": null,
+      "max_duration_ms": null,
+      "context_files": {},
+      "created_at": "2026-03-30T01:15:00",
+      "created_from": "manual"
+    },
+    {
+      "id": "test_hallucination_003",
+      "issue_type": "hallucination",
+      "user_message": "Check if port 8080 is running on my machine",
+      "expected_behavior": "Agent MUST use exec/tool to check port status (e.g. ss, netstat, lsof). Should NOT guess or assume port status.",
+      "forbidden_patterns": [],
+      "required_patterns": [],
+      "max_tool_calls": 5,
+      "max_duration_ms": null,
+      "context_files": {},
+      "created_at": "2026-03-30T01:15:00",
+      "created_from": "manual"
+    },
+    {
+      "id": "test_loop_behavior_001",
+      "issue_type": "loop_behavior",
+      "user_message": "Read the content of MEMORY.md",
+      "expected_behavior": "Agent should read the file ONCE and provide the content. Should NOT read the same file multiple times.",
+      "forbidden_patterns": [],
+      "required_patterns": [],
+      "max_tool_calls": 3,
+      "max_duration_ms": null,
+      "context_files": {
+        "MEMORY.md": "# Memory File\n\nThis is a test memory file.\n\n## Notes\n- Item 1\n- Item 2"
+      },
+      "created_at": "2026-03-30T01:15:00",
+      "created_from": "manual"
+    },
+    {
+      "id": "test_loop_behavior_002",
+      "issue_type": "loop_behavior",
+      "user_message": "List directories in my home folder",
+      "expected_behavior": "Agent should run ls/dir command ONCE and report results. Should NOT keep re-running the same command.",
+      "forbidden_patterns": [],
+      "required_patterns": [],
+      "max_tool_calls": 3,
+      "max_duration_ms": null,
+      "context_files": {},
+      "created_at": "2026-03-30T01:15:00",
+      "created_from": "manual"
+    },
+    {
+      "id": "test_loop_behavior_003",
+      "issue_type": "loop_behavior",
+      "user_message": "Find all Python files in the current directory",
+      "expected_behavior": "Agent should run find/ls command efficiently, not loop through the same files repeatedly.",
+      "forbidden_patterns": [],
+      "required_patterns": [],
+      "max_tool_calls": 4,
+      "max_duration_ms": null,
+      "context_files": {},
+      "created_at": "2026-03-30T01:15:00",
+      "created_from": "manual"
+    },
+    {
+      "id": "test_incomplete_response_001",
+      "issue_type": "incomplete_response",
+      "user_message": "Explain what this project does and list its main features",
+      "expected_behavior": "Response should be complete with both explanation AND feature list. Should not trail off or end abruptly.",
+      "forbidden_patterns": [
+        "^Done!?$",
+        "^OK!?$",
+        "^Selesai!?$",
+        "\\.\\.\\.$"
+      ],
+      "required_patterns": [
+        ".{100,}"
+      ],
+      "max_tool_calls": null,
+      "max_duration_ms": null,
+      "context_files": {},
+      "created_at": "2026-03-30T01:15:00",
+      "created_from": "manual"
+    },
+    {
+      "id": "test_incomplete_response_002",
+      "issue_type": "incomplete_response",
+      "user_message": "Give me 5 tips for writing better code",
+      "expected_behavior": "Response should include all 5 tips, numbered clearly. Should not stop after 2-3 tips.",
+      "forbidden_patterns": [],
+      "required_patterns": [
+        "[1-5]\\.",
+        ".{200,}"
+      ],
+      "max_tool_calls": null,
+      "max_duration_ms": null,
+      "context_files": {},
+      "created_at": "2026-03-30T01:15:00",
+      "created_from": "manual"
+    },
+    {
+      "id": "test_incomplete_response_003",
+      "issue_type": "incomplete_response",
+      "user_message": "What are the steps to deploy a Python app to production?",
+      "expected_behavior": "Response should provide complete deployment steps from start to finish, not truncate mid-explanation.",
+      "forbidden_patterns": [
+        "\\.\\.\\.$",
+        "^That's it!?$"
+      ],
+      "required_patterns": [
+        ".{150,}"
+      ],
+      "max_tool_calls": null,
+      "max_duration_ms": null,
+      "context_files": {},
+      "created_at": "2026-03-30T01:15:00",
+      "created_from": "manual"
+    }
+  ]
+}

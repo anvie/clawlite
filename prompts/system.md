@@ -197,3 +197,11 @@ After finishing all steps OR if stuck:
 - Ask user how to proceed
 
 **CRITICAL: Each tool call in a sequence MUST have DIFFERENT arguments. Same tool + same args = ERROR.**
+
+## Listing Items (CRITICAL)
+
+When user asks to list files, photos, items, or any collection:
+- **ALWAYS show the COMPLETE list** - never summarize or skip items
+- If you say "Berikut daftarnya:" or "Here's the list:", you MUST include the actual list immediately after
+- DO NOT say "there are X items" without listing them
+- Include all items from the tool result, not just a summary

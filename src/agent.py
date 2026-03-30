@@ -1042,6 +1042,7 @@ async def run_agent(
             if call_key in executed_tool_calls:
                 consecutive_duplicate_skips += 1
                 logger.info(f"Skipping duplicate tool call: {tool_name} (skip #{consecutive_duplicate_skips})")
+                logger.info(f"[LOOP_DEBUG] dup_key={call_key[:80]}... | consec_skips={consecutive_duplicate_skips} | total_executed={len(executed_tool_calls)}")
                 
                 # After 3 consecutive duplicate skips, FORCE break out of loop
                 if consecutive_duplicate_skips >= 3:
@@ -1066,6 +1067,7 @@ async def run_agent(
                 
             # Reset consecutive skip counter on successful NEW tool call
             consecutive_duplicate_skips = 0
+            logger.info(f"[LOOP_DEBUG] NEW_CALL accepted: {tool_name} | reset skip counter | total_executed={len(executed_tool_calls)}")
             executed_tool_calls.add(call_key)
             
             # Smart loop detection (multi-factor: args, result, gradual intervention)
@@ -1112,6 +1114,7 @@ async def run_agent(
                     result_text = f"Error: {result.error}"
                     logger.warning(f"Tool {tool_name} failed: {result.error}")
                 
+                    logger.info(f"[LOOP_DEBUG] TOOL_FAILED: {tool_name} | consec_skips stays at {consecutive_duplicate_skips} | NOT resetting")
                 # Track last tool result for fallback
                 last_tool_result = {"tool": tool_name, "result": result_text, "success": result.success}
                 

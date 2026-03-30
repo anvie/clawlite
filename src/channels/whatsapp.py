@@ -458,20 +458,19 @@ class WhatsAppChannel(BaseChannel):
             await self.send_message(user_id, f"❌ Gagal mengirim file. Coba lagi.")
     
     async def _handle_clear(self, user_id: str, raw_user_id: str) -> None:
-        """Handle /clear command."""
+        """Handle /clear command - clears conversation only, preserves memory."""
         # Clear in-memory history
         self.conversations[user_id] = []
         
-        # Clear persisted conversation
+        # Clear persisted conversation (using base class method)
         try:
-            from ..conversation import clear_today, is_enabled
-            if is_enabled():
-                clear_today(user_id)
+            result = await super()._handle_clear(user_id)
+            await self.send_message(raw_user_id, result)
         except Exception as e:
             self.logger.warning(f"Failed to clear persisted conversation: {e}")
+            await self.send_message(raw_user_id, "🗑️ In-memory history cleared.")
         
-        self.logger.info(f"🗑️ Cleared history for {user_id}")
-        await self.send_message(raw_user_id, "🗑️ History cleared.")
+        self.logger.info(f"🗑️ Cleared conversation for {user_id}")
     
     async def _handle_new(self, user_id: str, raw_user_id: str) -> None:
         """Handle /new command - start new session without deleting memory."""

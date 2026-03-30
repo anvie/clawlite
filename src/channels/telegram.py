@@ -211,16 +211,18 @@ class TelegramChannel(BaseChannel):
         
         # Clear persisted conversation
         try:
-            from ..conversation import clear_today, is_enabled
+            from ..conversation import is_enabled
             if is_enabled():
-                clear_today(user_id)
-                await self._handle_clear(user_id)
+                result = await self._handle_clear(user_id)
+                await update.message.reply_text(result)
+            else:
+                await update.message.reply_text("🗑️ In-memory history cleared.")
 
         except Exception as e:
             self.logger.warning(f"Failed to clear persisted conversation: {e}")
+            await update.message.reply_text("🗑️ In-memory history cleared.")
         
-        self.logger.info(f"🗑️ Cleared history for {user_id}")
-        await update.message.reply_text("🗑️ History cleared.")
+        self.logger.info(f"🗑️ Cleared conversation for {user_id}")
     
     async def _cmd_new(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle /new command - start new session without deleting memory."""

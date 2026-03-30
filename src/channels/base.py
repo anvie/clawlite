@@ -185,10 +185,12 @@ class BaseChannel(ABC):
     
     async def _handle_clear(self, user_id: str) -> str:
         """
-        Handle /clear command to clear conversation history and user memory.
+        Handle /clear command to clear conversation history only.
         
         Deletes:
         - Conversation history (all JSONL files)
+        
+        Preserves:
         - USER.md (user info)
         - MEMORY.md (long-term memory)
         - Daily memory logs (memory/*.md)
@@ -200,55 +202,27 @@ class BaseChannel(ABC):
             Confirmation message
         """
         try:
-            import os
-            from pathlib import Path
             from ..conversation import is_enabled, get_convo_dir
-            from ..context import get_user_dir
             
-            deleted_items = []
+            deleted_count = 0
             
-            # Clear conversation history
+            # Clear conversation history only
             if is_enabled():
                 convo_dir = get_convo_dir(user_id)
                 if convo_dir.exists():
                     for f in convo_dir.glob("*.jsonl"):
                         f.unlink()
-                        deleted_items.append(f"convo: {f.name}")
+                        deleted_count += 1
             
-            # Clear user memory files
-            user_dir = get_user_dir(user_id)
-            if user_dir.exists():
-                # Delete USER.md
-                user_md = user_dir / "USER.md"
-                if user_md.exists():
-                    user_md.unlink()
-                    deleted_items.append("USER.md")
-                
-                # Delete MEMORY.md
-                memory_md = user_dir / "MEMORY.md"
-                if memory_md.exists():
-                    memory_md.unlink()
-                    deleted_items.append("MEMORY.md")
-                
-                # Delete daily memory logs
-                memory_dir = user_dir / "memory"
-                if memory_dir.exists():
-                    count = 0
-                    for f in memory_dir.glob("*.md"):
-                        f.unlink()
-                        count += 1
-                    if count > 0:
-                        deleted_items.append(f"memory logs: {count} files")
+            self.logger.info(f"Cleared conversation for {user_id}: {deleted_count} files")
             
-            self.logger.info(f"Cleared all data for {user_id}: {', '.join(deleted_items)}")
-            
-            if deleted_items:
-                return f"🗑️ Cleared: {', '.join(deleted_items)}"
+            if deleted_count > 0:
+                return f"🗑️ Cleared {deleted_count} conversation file(s). Memory preserved."
             else:
-                return "ℹ️ No data to clear."
+                return "ℹ️ No conversation to clear."
             
         except Exception as e:
-            self.logger.error(f"Failed to clear data for {user_id}: {e}")
+            self.logger.error(f"Failed to clear conversation for {user_id}: {e}")
             return f"❌ Failed to clear: {str(e)[:200]}"
     
     async def _handle_new(self, user_id: str) -> str:
